@@ -1,0 +1,35 @@
+--- AE2 PatternProviderLogic : appeng.helpers.patternprovider.PatternProviderLogic
+    private final appeng.helpers.patternprovider.PatternProviderLogicHost host;
+    private final appeng.api.networking.security.IActionSource actionSource;
+    public boolean pushPattern(appeng.api.crafting.IPatternDetails, appeng.api.stacks.KeyCounter[]);
+    private void onPushPatternSuccess(appeng.api.crafting.IPatternDetails);
+    private void lambda$pushPattern$2(appeng.helpers.patternprovider.PatternProviderTarget, appeng.api.stacks.AEKey, long);
+--- AE2 CraftingCpuLogic : appeng.crafting.execution.CraftingCpuLogic
+    private appeng.crafting.execution.ExecutingCraftingJob job;
+    public int executeCrafting(int, appeng.me.service.CraftingService, appeng.api.networking.energy.IEnergyService, net.minecraft.world.level.Level);
+--- AE2 CraftingCpuHelper : appeng.crafting.execution.CraftingCpuHelper
+    public static appeng.api.stacks.GenericStack tryExtractInitialItems(appeng.api.networking.crafting.ICraftingPlan, appeng.api.networking.IGrid, appeng.crafting.inv.ListCraftingInventory, appeng.api.networking.security.IActionSource);
+    public static appeng.api.stacks.KeyCounter[] extractPatternInputs(appeng.api.crafting.IPatternDetails, appeng.crafting.inv.ICraftingInventory, net.minecraft.world.level.Level, appeng.api.stacks.KeyCounter, appeng.api.stacks.KeyCounter);
+--- AE2 NetworkCraftingProviders : appeng.me.service.helpers.NetworkCraftingProviders
+    public void addProvider(appeng.api.networking.IGridNode);
+    public void removeProvider(appeng.api.networking.IGridNode);
+    public java.util.Set<appeng.api.stacks.AEKey> getCraftables(appeng.api.storage.AEKeyFilter);
+    public java.util.Set<appeng.api.stacks.AEKey> getCraftableKeys();
+    public java.util.Collection<appeng.api.crafting.IPatternDetails> getCraftingFor(appeng.api.stacks.AEKey);
+--- AE2 ExecutingCraftingJob : appeng.crafting.execution.ExecutingCraftingJob
+    private static final java.lang.String NBT_TASKS;
+    final java.util.Map<appeng.api.crafting.IPatternDetails, appeng.crafting.execution.ExecutingCraftingJob$TaskProgress> tasks;
+    appeng.api.stacks.GenericStack finalOutput;
+    long remainingAmount;
+--- AE2 TaskProgress : appeng.crafting.execution.ExecutingCraftingJob$TaskProgress
+    long value;
+--- GTM MEPatternBufferPartMachine : com.gregtechceu.gtceu.integration.ae2.machine.MEPatternBufferPartMachine
+    private final com.google.common.collect.BiMap<appeng.api.crafting.IPatternDetails, com.gregtechceu.gtceu.integration.ae2.machine.MEPatternBufferPartMachine$InternalSlot> detailsSlotMap;
+    private void onPatternChange(int);
+    public boolean pushPattern(appeng.api.crafting.IPatternDetails, appeng.api.stacks.KeyCounter[]);
+    public com.gregtechceu.gtceu.integration.ae2.machine.MEPatternBufferPartMachine$InternalSlot[] getInternalInventory();
+--- GTM SlotRHL ctor : com.gregtechceu.gtceu.integration.ae2.machine.trait.InternalSlotRecipeHandler$SlotRHL
+    public com.gregtechceu.gtceu.integration.ae2.machine.trait.InternalSlotRecipeHandler$SlotRHL(com.gregtechceu.gtceu.integration.ae2.machine.MEPatternBufferPartMachine, com.gregtechceu.gtceu.integration.ae2.machine.MEPatternBufferPartMachine$InternalSlot, int);
+--- GTM RecipeLogic : com.gregtechceu.gtceu.api.machine.trait.RecipeLogic
+    public final com.gregtechceu.gtceu.api.machine.feature.IRecipeLogicMachine machine;
+    public void onRecipeFinish();

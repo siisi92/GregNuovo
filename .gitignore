@@ -1,0 +1,46 @@
+# ---- Gradle / 构建产物 ----
+.gradle/
+build/
+out/
+bin/
+
+# 打包分发的压缩包（源码 zip、发版附件等）
+dist/
+*.zip
+
+# 开发环境运行目录（世界、日志、eula 等）
+run/
+
+# Gradle 缓存与本地镜像（离线构建用，体积很大，不要提交）
+.ghome/
+.gnative/
+
+# ---- 本地依赖 jar ----
+# 上游 mod 的 jar 一律不提交，用 scripts/fetch-libs.ps1 获取，详见 libs/README.md
+libs/*.jar
+
+# ---- 开发期调研资料 ----
+# 上游源码的逐字副本（AE2 / GTM），仅本地查阅用，不随仓库分发
+refsrc/
+
+# ---- 临时文件 ----
+.tmp*/
+.smoketest.log
+*.log
+devtest/
+
+# ---- IDE ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.eclipse/
+.settings/
+.classpath
+.project
+.vscode/
+
+# ---- 系统 ----
+Thumbs.db
+desktop.ini
+.DS_Store

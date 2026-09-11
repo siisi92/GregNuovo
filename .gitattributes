@@ -1,0 +1,16 @@
+# 换行与二进制文件处理
+* text=auto eol=lf
+
+*.java    text eol=lf
+*.gradle  text eol=lf
+*.md      text eol=lf
+*.json    text eol=lf
+*.toml    text eol=lf
+*.properties text eol=lf
+gradlew   text eol=lf
+gradlew.bat text eol=crlf
+*.ps1     text eol=crlf
+
+*.jar     binary
+*.png     binary
+*.zip     binary

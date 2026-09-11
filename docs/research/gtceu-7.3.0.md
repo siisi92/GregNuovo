@@ -100,6 +100,7 @@ public static boolean isIntegratedCircuit(ItemStack itemStack) {            // �
 ```
 
 要点：
+
 - **NBT 键：`"Configuration"`（int）**，位于物品根 tag 下（非子 tag）。
 - `getCircuitConfiguration` 对非电路物品返回 `0`；因此**不能**用返回值区分“配置 0”和“不是电路”——必须先 `isIntegratedCircuit`。
 - `isIntegratedCircuit(ItemStack)` **有副作用**：若该物品是电路且无 tag，会写入 `Configuration=0`。传入不可变的 `ItemStack` 副本时要注意。
@@ -217,6 +218,7 @@ public GTRecipeBuilder notConsumable(Ingredient ingredient) {
 ```
 
 结论：
+
 - **配方匹配（`simulated == true`）时，`chance == 0` 的输入仍然必须存在**（会被加入 `searchRecipeContents`），所以电路**必须真实存在于某个输入 handler 中**才能匹配到该配方。
 - **实际执行（`simulated == false`）时，`chance == 0` 的输入不会进入待消耗列表**，因此永远不会被 `extractItem`。
 
@@ -319,8 +321,8 @@ if (machine instanceof IHasCircuitSlot circuitMachine
 **这是唯一完全无需反射/OAT/Mixin 的路径，且与 GT 自身 `IntCircuitBehaviour.useOn` 的行为完全一致。强烈推荐。**
 
 补充：
-- 若只想改数值而不换物品实例（保留其它 NBT），可用
-  `ItemStack s = inv.getStackInSlot(0); if (IntCircuitBehaviour.isIntegratedCircuit(s)) { IntCircuitBehaviour.setCircuitConfiguration(s, n); inv.setStackInSlot(0, s); }` —— 这正是 `CircuitFancyConfigurator` 的按钮逻辑（`api/machine/fancyconfigurator/CircuitFancyConfigurator.java:131-141`）。
+
+- 若只想改数值而不换物品实例（保留其它 NBT），可用 `ItemStack s = inv.getStackInSlot(0); if (IntCircuitBehaviour.isIntegratedCircuit(s)) { IntCircuitBehaviour.setCircuitConfiguration(s, n); inv.setStackInSlot(0, s); }` —— 这正是 `CircuitFancyConfigurator` 的按钮逻辑（`api/machine/fancyconfigurator/CircuitFancyConfigurator.java:131-141`）。
 - 清除电路：`inv.setStackInSlot(0, ItemStack.EMPTY)`（仅当 `ConfigHolder.INSTANCE.machines.ghostCircuit == true` 时 GT 自己的 GUI 才允许空电路；**但代码层面 `setStackInSlot` 不做这个检查**）。
 
 ### 3.2 ❌ 不推荐 / 需注意的路径
@@ -337,6 +339,7 @@ if (machine instanceof IHasCircuitSlot circuitMachine
 ### 3.3 关于“哪一个槽位是电路槽”
 
 **不存在一个稳定的“NBT 槽位索引”可以从外部推导**：电路槽是**独立的 `NotifiableItemStackHandler` 实例**（1 格），通过 `IHasCircuitSlot#getCircuitInventory()` 暴露，在 Forge capability 聚合视图中**根本不可见**（见上表）。因此：
+
 - 通过 capability 访问时，**没有“电路槽索引”这个概念**；
 - 通过代码访问时，索引恒为 `0`（`circuitInventory.setStackInSlot(0, …)`）。
 
@@ -411,6 +414,7 @@ IOFilteredInvWrapper handlerList = new IOFilteredInvWrapper(list, io,
 ```
 
 结论（**对 addon 直接可用**）：
+
 - 暴露给外部（AE2 样板供应器、漏斗、管道）的是 Forge `CapabilityItemHandler.ITEM_HANDLER`，由 `MetaMachineBlockEntity` 转发到 `getItemHandlerCap`。
 - **默认状态下任意一面都可以插入**（`IO.BOTH`）。
 - **例外**：`SimpleTieredMachine` 实现了 `IAutoOutputBoth`。其 `outputFacingItems` 默认是**机器正面的反面**（`SimpleTieredMachine` 构造器：`this.outputFacingItems = hasFrontFacing() ? getFrontFacing().getOpposite() : Direction.UP;`），且 `allowInputFromOutputSideItems` 默认 `false`。也就是说：**“物品输出面”那一面默认只出不进**。AE2 样板供应器应贴在**输出的反方向面**（即一般意义上的“输入侧”）上。
@@ -530,8 +534,7 @@ public void onRecipeFinish() {
 **外部检测方案（按可靠性排序）：**
 
 1. **最快、最可靠：Mixin `@Inject` 到 `RecipeLogic#onRecipeFinish()V` 的 TAIL**（或 `HEAD` 以取到“本次产出前的 lastRecipe”）。这是唯一的**精确边沿**。
-2. **轮询方案（无 Mixin）**：每 tick / 每 N tick 观察
-   `logic.getConsecutiveRecipes()` 递增，或 `status` 从 `WORKING` 变为 `IDLE`/`WORKING`（`WORKING → WORKING` 且 `progress` 回绕说明连做）。
+2. **轮询方案（无 Mixin）**：每 tick / 每 N tick 观察 `logic.getConsecutiveRecipes()` 递增，或 `status` 从 `WORKING` 变为 `IDLE`/`WORKING`（`WORKING → WORKING` 且 `progress` 回绕说明连做）。
    - 单方块机器默认 `keepSubscribing() == false`（`WorkableTieredMachine#keepSubscribing()` 返回 `false`），机器会在无配方时**退订 tick**；此时 `onRecipeFinish` 之后状态会稳定在 `IDLE`，用 `progress==0 && duration==0 && !isActive()` 判断即可。
    - 更稳的组合：记录上一 tick 的 `getConsecutiveRecipes()` + `getLastRecipe()` 引用是否改变。
 3. **无需 Mixin 的“产出后”钩子**：给输出槽/输出总线注册 `addChangedListener`（`NotifiableRecipeHandlerTrait#addChangedListener(Runnable)`，public，返回 `ISubscription`），在产出写入时立即被回调。适合“产出后立刻回收”的场景。
@@ -622,6 +625,7 @@ for (Content c : itemOut) {
 ```
 
 辅助 API（`api/recipe/RecipeHelper.java`，全 public static）：
+
 - `getOutputItems(GTRecipe)` → `List<ItemStack>`（第 ~119 行；注意它会取 `ingredient.getItems()[0]`，**丢失 chance 信息**，做概率判断时不要用它）。
 - `getOutputItems(GTRecipeBuilder)`、`getInputItems(GTRecipe)`、`getInputFluids(...)`、`getOutputFluids(...)`。
 - `getOutputContents(GTRecipe, RecipeCapability<T>)` / `getInputContents(...)`。
@@ -668,6 +672,7 @@ Iterator<GTRecipe> it = type.searchRecipe((IRecipeCapabilityHolder) machine,
 | `RecipeHelper.matchRecipe` | `public static ActionResult matchRecipe(IRecipeCapabilityHolder holder, GTRecipe recipe)` | 同上 | 纯模拟，不改动内容 |
 
 **注意**：
+
 - `holder` 必须是 **`IRecipeCapabilityHolder`**（`WorkableTieredMachine` / `WorkableMultiblockMachine` 都实现了它）。**对单方块机器**，`IRecipeLogicMachine extends IRecipeCapabilityHolder`，所以直接强转即可。
 - `GTRecipeLookup.find/getRecipeIterator` 是**基于 holder 当前库存**的查找（`prepareRecipeFind` 从 `holder.getCapabilitiesForIO(IO.IN)` 收集原料）。若只想“枚举该配方类型下所有配方”，7.3.0 **没有**公开的 `getRecipesFor(...)` / `getAllRecipes()` 之类方法（**这点已核实：`GTRecipeLookup` 只有上表所列 public 方法，没有返回全量集合的公开 API**）。可行的替代方案：
   1. 用 `GTRecipeType#getRecipesInCategory(GTRecipeCategory)`（`GTRecipeType.java:320`，public）——但只覆盖已加入分类的配方；
@@ -717,6 +722,7 @@ for (Content c : recipe.getInputContents(ItemRecipeCapability.CAP)) {
 ```
 
 参考 GT 自身的判定（`api/capability/recipe/ItemRecipeCapability.java`）：
+
 - `getMaxParallelByInput`：`if (ing instanceof IntCircuitIngredient) continue;`（第 218 行）；`if (content.chance == 0) { nonConsumables.addTo(ing, count); } else { consumables... }`（第 225-226 行）。
 - `applyWidgetInfo`：`if (io == IO.IN && (content.chance == 0 || this.of(content.content) instanceof IntCircuitIngredient)) slot.setIngredientIO(IngredientIO.CATALYST);`（第 492-493 行）。
 
@@ -851,6 +857,7 @@ public void pushPattern(IPatternDetails patternDetails, KeyCounter[] inputHolder
 ```
 
 **关键点**：
+
 - `!isFormed()` 是最外层短路条件 —— **样板总成必须已成型（作为多方块部件被控制器接纳）才能推样板**。
 - 原料被写入 `InternalSlot` 的 `itemInventory` / `fluidInventory`（`Object2LongOpenCustomHashMap<ItemStack>` / `Object2LongOpenHashMap<FluidStack>`，**private 字段**），而不是普通物品槽。
 - 若某个 key 已存在，`addTo` 会**累加**数量。
@@ -969,6 +976,7 @@ AE pushPattern → detailsSlotMap 找到 InternalSlot → Slot.pushPattern → s
 ```
 
 **重要推论**：
+
 1. 配方必须**完整地由“某一个槽 + 共享电路槽 + shareInventory/shareTank”满足**（BUS_DISTINCT 语义：一个 distinct 组必须能独立满足整个配方）。
 2. **27 个槽共用同一个 `circuitInventory` 对象**（`buffer.getCircuitInventory()` 被重复 addHandlers 到每个 SlotRHL）。这意味着 **7.3.0 原生状态下所有样板槽共用同一个电路号**——这正是需求 (c) 要解决的问题。
 
@@ -1037,23 +1045,21 @@ public void refund() {
 **路线 B：在 `MEPatternBufferPartMachine` 上新增 per-slot 电路存储（更彻底，但要 Mixin 加字段）**
 
 - 目标：`com.gregtechceu.gtceu.integration.ae2.machine.MEPatternBufferPartMachine`（**public，非 final**）。
-- 用 `@Mixin(MEPatternBufferPartMachine.class)` 添加
-  `@Unique @Persisted`（LDLib2 SyncData 注解可与 Mixin 共存，但需自行注册 `ManagedFieldHolder`，风险较高）或更安全：用 `@Unique` 普通字段 + 自行在 `saveCustomPersistedData/loadCustomPersistedData`（`MachineTrait` 层）或 `MEPatternBufferPartMachine` 的 `serializeNBT` 路径里持久化。
+- 用 `@Mixin(MEPatternBufferPartMachine.class)` 添加 `@Unique @Persisted`（LDLib2 SyncData 注解可与 Mixin 共存，但需自行注册 `ManagedFieldHolder`，风险较高）或更安全：用 `@Unique` 普通字段 + 自行在 `saveCustomPersistedData/loadCustomPersistedData`（`MachineTrait` 层）或 `MEPatternBufferPartMachine` 的 `serializeNBT` 路径里持久化。
 - 再在 `getRecipeHandlers()`（**public**，签名 `()Ljava/util/List;`）`RETURN` 处，把返回的 27 个 `SlotRHL` 逐一“打补丁”。
 
 > **可行性提示**：`InternalSlotRecipeHandler` 本身是 **`public final class`** → **不能继承，但可以 Mixin**。`SlotRHL` 是 **protected static、非 final** → 可 Mixin。`SlotItemRecipeHandler` / `SlotFluidRecipeHandler` 是 **`private static class`** → 只能通过 `@Mixin(targets = "...$SlotItemRecipeHandler")` 字符串定位，且引用其类型时需要用 `Object`/`IRecipeHandlerTrait` 等公共父类型。
 
 **避免 Mixin 的替代方案（值得优先评估）**：
-- `MEPatternBufferProxyPartMachine` 已经有现成的“代理 handler”模式：`ProxySlotRecipeHandler`（`integration/ae2/machine/trait/ProxySlotRecipeHandler.java`，**public final class**）内部用 `ProxyItemRecipeHandler#setProxy(IRecipeHandlerTrait<Ingredient>)` 把 `buffer.getCircuitInventory()` 等“代理”出去。
-  该类的具体行为对 addon 有三点价值：
+
+- `MEPatternBufferProxyPartMachine` 已经有现成的“代理 handler”模式：`ProxySlotRecipeHandler`（`integration/ae2/machine/trait/ProxySlotRecipeHandler.java`，**public final class**）内部用 `ProxyItemRecipeHandler#setProxy(IRecipeHandlerTrait<Ingredient>)` 把 `buffer.getCircuitInventory()` 等“代理”出去。该类的具体行为对 addon 有三点价值：
   1. 证明可以**用一个自定义 `IRecipeHandlerTrait` 冒充某个槽的电路来源**；
   2. `ProxyItemRecipeHandler` 是 **private static**，不能直接复用，但它的实现只有 ~30 行，addon 完全可以照抄成自己的 public 类；
   3. `MEPatternBufferProxyPartMachine#getRecipeHandlers()`（public）返回 `proxySlotRecipeHandler.getProxySlotHandlers()`，addon 也可以**自己注册一个自定义的 `IMultiPart`**（继承 `ItemBusPartMachine`/`TieredIOPartMachine`）并在其 `getRecipeHandlers()` 里返回**自己的 27 个 RHL**（每个 RHL 里放自己的 per-slot 电路 handler + 原有的 `InternalSlot` item/fluid handler）。这条路线**零 Mixin**，但需要把 buffer 的 `internalInventory` 与 `detailsSlotMap` 暴露出来（二者分别是 `@Getter protected final InternalSlot[] internalInventory` → **`getInternalInventory()` 是 public**；`detailsSlotMap` 是**无 getter 的 private**，只能通过 `getAvailablePatterns()` 反推，或用 `internalInventory[i]` 与 `patternInventory.getStackInSlot(i)` 的**同索引对应关系**——见 8.2，`detailsSlotMap` 就是按索引映射的）。
 
 #### (ii) 概率产出缺失时重推样板
 
-- **推荐注入点：`MEPatternBufferPartMachine#pushPattern`**
-  描述符：`(Lappeng/api/crafting/IPatternDetails;[Lappeng/api/stacks/KeyCounter;)Z` 用途：记录“最近一次推送的样板 + 原料 + 目标槽”，供后续补偿逻辑使用。
+- **推荐注入点：`MEPatternBufferPartMachine#pushPattern`** 描述符：`(Lappeng/api/crafting/IPatternDetails;[Lappeng/api/stacks/KeyCounter;)Z` 用途：记录“最近一次推送的样板 + 原料 + 目标槽”，供后续补偿逻辑使用。
   - `@Inject(method = "pushPattern", at = @At("RETURN"), cancellable = false)` —— 读参数即可（`IPatternDetails` 与 `KeyCounter[]` 都是方法参数，可直接拿）。
 - **触发补偿的地方（二选一）**：
   - ① `RecipeLogic#onRecipeFinish()V`（`api/machine/trait/RecipeLogic.java:484`，**public**）——多方的 `recipeLogic` 是 `WorkableMultiblockMachine` 的 `public final RecipeLogic recipeLogic`（`@Getter`），可直接访问。注入 `TAIL` 后检查：本次 `logic.getLastRecipe()` 的 `ItemRecipeCapability.CAP` 输出中，哪些 `isChanced()` 的产出**没有**出现在输出总线里 → 对该样板调用 `slot.pushPattern(...)` 重推（或直接再次触发 AE 的 `ICraftingProvider` 流程）。
@@ -1061,6 +1067,7 @@ public void refund() {
 - **注意**：`pushPattern` 需要 `KeyCounter[]`（AE2 的原料计数数组）。addon 若要在**不重新向 AE 请求**的前提下重推，必须在首次 `pushPattern` 时就把 `KeyCounter[]` 缓存下来（注意 `KeyCounter` 是否可变——建议深拷贝/重新构造）。
 
 **推荐的“重推”判定（结合需求 (e)）**：
+
 1. 记录 `IPatternDetails` → 期望产出（`details.getOutputs()`，AE2 侧）与其在 GT 配方中的 chance；
 2. 合成结束时统计输出总线/槽的实际产出；
 3. 若 `实际 < 期望`，且缺失项对应 GT 配方中的 chanced 输出，则按 AE 合成任务的剩余需求量决定重推次数。
@@ -1573,6 +1580,7 @@ handleItemInternal= "(Ljava/util/List;Z)Ljava/util/List;"
 > `common/data/GTItems.java.partial.txt` 是**连续、未修改的前缀**（已用中段地标交叉验证：`createFluidCell` L398、`ELECTRIC_PUMP_LV` L724、`CONVEYOR_MODULE_LV` L1012、`ROBOT_ARM` L1203+、`FIELD_GENERATOR` L1321+、`EMITTER` L1373+、`SENSOR` L1413+、`VACUUM_TUBE` L1627），可安全用于查证该文件前 1637 行的内容。
 
 同时抓取（未落盘，仅用于本报告）：
+
 - `src/main/resources/gtceu.mixins.json`（Mixin 包名 / 插件 / injectors）。
 - `src/main/resources/META-INF/accesstransformer.cfg`（确认 **GT 没有为自己任何类开 AT**）。
 - `gradle.properties`（mod id / 版本 / group）。

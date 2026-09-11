@@ -104,8 +104,7 @@
 
 绝大部分问题都能靠两样东西定位：
 
-1. **`/gregnuovo status`**（OP）—— 打印各环节计数：钩子是否触发、有没有找到相邻 GT 目标、写入电路几次、
-   机器是否真的开过工、退料扫描与退回次数、挂起记录卡在哪个阶段；
+1. **`/gregnuovo status`**（OP）—— 打印各环节计数：钩子是否触发、有没有找到相邻 GT 目标、写入电路几次、机器是否真的开过工、退料扫描与退回次数、挂起记录卡在哪个阶段；
 2. **`misc.debugLog = true`** —— 日志里 `GregNuovo：` 开头的行会说明每一步的判断依据。
 
 对照表与常见现象见 [docs/使用说明.md](docs/使用说明.md) 第 5 节、[docs/需求实现说明.md](docs/需求实现说明.md) 第 10 节。
@@ -122,8 +121,7 @@ powershell -ExecutionPolicy Bypass -File scripts\fetch-libs.ps1   # 下载编译
 * 需要 JDK 17+（用 JDK 21 运行 Gradle 也可以，编译目标已固定为 17）；
 * 依赖 jar 只用于编译与开发运行，**不会打包进产物**，也没有随仓库分发（`.gitignore` 已排除 `libs/*.jar`）；
 * 开发环境运行：`./gradlew runClient` / `./gradlew runServer`（`run/` 下需自备 `eula.txt`）；
-* 脚本兼容 Windows PowerShell 5.1 与 PowerShell 7；若系统禁止运行脚本，用上面的
-  `-ExecutionPolicy Bypass`（或先执行 `Set-ExecutionPolicy -Scope Process Bypass`）。
+* 脚本兼容 Windows PowerShell 5.1 与 PowerShell 7；若系统禁止运行脚本，用上面的 `-ExecutionPolicy Bypass`（或先执行 `Set-ExecutionPolicy -Scope Process Bypass`）。
 
 ### 发布到你自己的 GitHub 仓库
 
@@ -166,15 +164,12 @@ Mixin 注入点全部针对真实 jar 用 `javap` 逐条核对过，结果保存
 
 ## 兼容性与已知边界
 
-* 只接管 **GT 机器**（实现 `IRecipeLogicMachine` 的机器与多方块控制器）；
-  AE2 及其它 mod 的机器保持原版行为；
+* 只接管 **GT 机器**（实现 `IRecipeLogicMachine` 的机器与多方块控制器）； AE2 及其它 mod 的机器保持原版行为；
 * 目标方块没有可写电路槽时，**不会**剥掉电路物品（保持原版当物品推送），避免配方失配；
 * 概率产物的判定来自 GT 配方（用样板输出 + 输入匹配机器可跑的配方）。匹配不到唯一配方时按确定性处理，不重试；
 * 重试是**真实投料**，会消耗材料（这是需求3 的语义），可用 `chance.maxRetries` 限制；
-* AE2 的合成计划按「每一次合成」计算输入，因此一次作业要用 N 次模具时网络里最好备够 N 个
-  （用完会如数退回，不会被吃掉）；编程电路不受此限制；
-* 使用 **ME输入总线** 结构时，喂给多方块的物品本来就是 AE 网络的视图、不落地，
-  此时“没有余料可退”是正确行为（`/gregnuovo status` 会显示 `退料扫描` 有计数、`退回余料` 为 0）。
+* AE2 的合成计划按「每一次合成」计算输入，因此一次作业要用 N 次模具时网络里最好备够 N 个（用完会如数退回，不会被吃掉）；编程电路不受此限制；
+* 使用 **ME输入总线** 结构时，喂给多方块的物品本来就是 AE 网络的视图、不落地，此时“没有余料可退”是正确行为（`/gregnuovo status` 会显示 `退料扫描` 有计数、`退回余料` 为 0）。
 
 ## 版本与验证状态
 
@@ -191,8 +186,7 @@ Mixin 注入点全部针对真实 jar 用 `javap` 逐条核对过，结果保存
 ## 许可与致谢
 
 * 本模组以 **LGPL-3.0** 发布，见 [LICENSE](LICENSE)；第三方组件与合规说明见 [THIRD-PARTY.md](THIRD-PARTY.md)。
-* 通过 Mixin 注入 [Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2)
-  （API 为 MIT，实现为 LGPL-3.0）与 [GregTech Modern](https://github.com/GregTechCEu/GregTech-Modern)（LGPL-3.0）的内部实现，**不包含**两者的任何源码或资源；`libs/` 下的 jar 仅为编译依赖，不随仓库分发、也不打包进产物。
+* 通过 Mixin 注入 [Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2)（API 为 MIT，实现为 LGPL-3.0）与 [GregTech Modern](https://github.com/GregTechCEu/GregTech-Modern)（LGPL-3.0）的内部实现，**不包含**两者的任何源码或资源；`libs/` 下的 jar 仅为编译依赖，不随仓库分发、也不打包进产物。
 * 本项目为非官方附属，与上述两个团队无隶属关系。
 
 ---
@@ -202,10 +196,9 @@ Mixin 注入点全部针对真实 jar 用 `javap` 逐条核对过，结果保存
 **GregNuovo** is a small Forge 1.20.1 addon that makes AE2 autocrafting work properly with GregTech Modern machines (single-block machines, multiblocks with input/ME input buses, and GTM's ME Pattern Buffer):
 
 1. non-consumed recipe inputs (molds, catalysts) are returned to the ME network after the craft;
-2. the programmed circuit encoded in a pattern is written into the machine's circuit slot
-   (not pushed as an item, no network stock required) — or auto-detected from the GT recipe;
+2. the programmed circuit encoded in a pattern is written into the machine's circuit slot (not pushed as an item, no network stock required) — or auto-detected from the GT recipe;
 3. chanced byproducts are re-crafted until they actually drop, when the crafting job needs them;
 4. byproducts the job does *not* need are never waited for;
 5. every output written in a pattern becomes requestable/craftable in the AE network.
 
-No new blocks or items. Built against Forge 47.4.10, GregTech Modern 1.20.1-7.3.0, AE2 15.4.10. Diagnostics: `/gregnuovo status` (OP) plus `misc.debugLog = true`. Licensed under LGPL-3.0. #   G r e g N u o v o    
+No new blocks or items. Built against Forge 47.4.10, GregTech Modern 1.20.1-7.3.0, AE2 15.4.10. Diagnostics: `/gregnuovo status` (OP) plus `misc.debugLog = true`. Licensed under LGPL-3.0.

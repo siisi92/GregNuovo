@@ -48,11 +48,11 @@ function Join-Text([string]$a, [string]$b) {
     $next = $b[0]
     # 两侧都是中日韩字符：直接相接，不插空格
     if ((Is-CJK $prev) -and (Is-CJK $next)) { return $a + $b }
-    # 后半段以开括号/开引号起始：也不插空格（中文里“、[链接]”“（注释）”之间不该有空格）
+    # 中文与开括号/开引号相邻时不插空格（“、[链接]”“保证(1)”），英文则照常插空格（“slot (not pushed…”）
     # 注意：弯引号不能字面写进 PS 字符串（PS 5.1 会把 U+2018/201C 当字符串分隔符），用 char 拼接
     $openers = '([{（〔【「『《〈' + [char]0x201C + [char]0x2018
-    if ($openers.IndexOf($next) -ge 0) { return $a + $b }
-    if ($openers.IndexOf($prev) -ge 0) { return $a + $b }
+    if ((Is-CJK $prev) -and ($openers.IndexOf($next) -ge 0)) { return $a + $b }
+    if ((Is-CJK $next) -and ($openers.IndexOf($prev) -ge 0)) { return $a + $b }
     return $a + ' ' + $b
 }
 
@@ -126,7 +126,13 @@ foreach ($file in $Path) {
 
         if ($startsNew) {
             if ($null -ne $pending) { $out.Add($pending); $pending = $null }
-            $out.Add($line)
+            # 列表项要“能被续接”：它后面的缩进续行要并进这一项，而不是各自成行
+            if ($line -match '^\s*([-*+]|\d+[.)])\s') {
+                $pending = $line
+            } else {
+                # 标题/表格/围栏/HTML/缩进代码：独立成行，不吸收后续行
+                $out.Add($line)
+            }
         } else {
             if ($null -eq $pending) { $pending = $line } else { $pending = Join-Text $pending $line }
         }

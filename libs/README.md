@@ -30,6 +30,5 @@ powershell -ExecutionPolicy Bypass -File scripts\fetch-libs.ps1
 
 ## 换版本时
 
-* 换 GTM / AE2 版本后，**必须**用 `javap` 重新核对 `docs/mixin-target-audit.txt` 里列出的所有注入点
-  （类名、方法描述符、私有字段、包私有内部类）——本模组注入的是它们的内部实现。
+* 换 GTM / AE2 版本后，**必须**用 `javap` 重新核对 `docs/mixin-target-audit.txt` 里列出的所有注入点（类名、方法描述符、私有字段、包私有内部类）——本模组注入的是它们的内部实现。
 * 同步更新 `gradle.properties`、`build.gradle` 与上表中的文件名/版本。

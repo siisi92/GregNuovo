@@ -26,8 +26,7 @@ mixin/    AE2 / GTM 的注入点，尽量保持“只做转发与状态读写”
 ## 提交前请自查
 
 1. `./gradlew build` 通过；
-2. **改动注入点后，务必重新核对目标**（AE2/GTM 的类名、方法描述符、私有字段是否还在），
-   核对方式参考 `docs/mixin-target-audit.txt` 里用的 `javap` 方法；
+2. **改动注入点后，务必重新核对目标**（AE2/GTM 的类名、方法描述符、私有字段是否还在），核对方式参考 `docs/mixin-target-audit.txt` 里用的 `javap` 方法；
 3. 新功能请挂上 `/gregnuovo status` 的计数，方便玩家自查（这个模组的绝大部分 issue 都靠它定位）；
 4. 面向玩家的行为变化请同时更新 `docs/使用说明.md` 与 `CHANGELOG.md`。
 
@@ -52,8 +51,7 @@ powershell -ExecutionPolicy Bypass -File scripts\reflow-markdown.ps1           #
 * `gtceu` / `ae2` / `GregNuovo` 的版本（`logs/latest.log` 开头即可）
 * `/gregnuovo status` 的完整输出（需 OP）
 * `misc.debugLog = true` 后复现一次，`logs/latest.log` 里所有含 `GregNuovo` 的行
-* 你的结构：样板供应器紧挨的是什么方块（机器本体 / 输入总线 / ME输入总线 / ME样板总成）、
-  多方块是什么机器、样板里都有什么
+* 你的结构：样板供应器紧挨的是什么方块（机器本体 / 输入总线 / ME输入总线 / ME样板总成）、多方块是什么机器、样板里都有什么
 
 ## 许可
 

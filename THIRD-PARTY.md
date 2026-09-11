@@ -12,14 +12,10 @@
 
 ## 许可证合规
 
-* 本模组自身以 **LGPL-3.0** 发布，完整文本见 [`LICENSE`](LICENSE)，源码随仓库公开
-  （即使把 Mixin 注入视为“对库的修改”，LGPL-3.0 §2 的要求也已满足）；
-* 本模组**不分发** AE2 / GTM 的任何代码或 jar：`libs/*.jar` 已被 `.gitignore` 排除，
-  发布产物 jar 内只有 `com/gregnuovo/**` 与本模组资源，另附 `META-INF/LICENSE-GregNuovo`；
-* 运行时链接的是整合包里已有的 AE2 / GTM jar（对应 LGPL-3.0 §4(d)(1) 的“共享库机制”），
-  用户可以自行替换成接口兼容的修改版本；
-* 若你以整合包形式**同时分发**本模组与 AE2 / GTM，请按 LGPL-3.0 §4(b) 随附
-  [GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.txt) 与[GNU LGPL v3](https://www.gnu.org/licenses/lgpl-3.0.txt) 文本（AE2 / GTM 自身的发布物中也已包含其许可声明）。
+* 本模组自身以 **LGPL-3.0** 发布，完整文本见 [`LICENSE`](LICENSE)，源码随仓库公开（即使把 Mixin 注入视为“对库的修改”，LGPL-3.0 §2 的要求也已满足）；
+* 本模组**不分发** AE2 / GTM 的任何代码或 jar：`libs/*.jar` 已被 `.gitignore` 排除，发布产物 jar 内只有 `com/gregnuovo/**` 与本模组资源，另附 `META-INF/LICENSE-GregNuovo`；
+* 运行时链接的是整合包里已有的 AE2 / GTM jar（对应 LGPL-3.0 §4(d)(1) 的“共享库机制”），用户可以自行替换成接口兼容的修改版本；
+* 若你以整合包形式**同时分发**本模组与 AE2 / GTM，请按 LGPL-3.0 §4(b) 随附[GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.txt) 与[GNU LGPL v3](https://www.gnu.org/licenses/lgpl-3.0.txt) 文本（AE2 / GTM 自身的发布物中也已包含其许可声明）。
 
 ## 声明
 

@@ -21,7 +21,7 @@ hook/     所有 mixin 的统一入口 GNHooks
 mixin/    AE2 / GTM 的注入点，尽量保持“只做转发与状态读写”
 ```
 
-写注入点前请先看 `docs/research/`（对 AE2 15.4.10 与 GTM 7.3.0 的 API 调研，含精确类名/方法/字段）以及 `docs/mixin-target-audit.txt`（对真实 jar 的核对结果）。
+写注入点前请先看 `docs/mixin-target-audit.txt`（对真实 jar 的逐条核对结果，包含每个注入点的类名/方法/字段）以及 `docs/需求实现说明.md`（每项功能的实现位置与排查对照表）。上游 API 的内部调研笔记属于开发期资料，放在本地的 `devnotes/`（已在 `.gitignore` 中，不随仓库分发）。
 
 ## 提交前请自查
 

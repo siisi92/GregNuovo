@@ -160,7 +160,7 @@ docs/                            使用说明、实现说明、注入点核对�
 scripts/fetch-libs.ps1           依赖 jar 下载脚本
 ```
 
-Mixin 注入点全部针对真实 jar 用 `javap` 逐条核对过，结果保存在[docs/mixin-target-audit.txt](docs/mixin-target-audit.txt)；对 AE2 15.4.10 与 GTM 7.3.0 的 API 调研（含精确类名/方法/字段）在 [docs/research](docs/research)；从需求澄清到发布准备的完整过程记录见 [docs/开发全过程.md](docs/开发全过程.md)。
+Mixin 注入点全部针对真实 jar 用 `javap` 逐条核对过，结果保存在 [docs/mixin-target-audit.txt](docs/mixin-target-audit.txt)；从需求澄清到发布准备的完整过程记录见 [docs/开发全过程.md](docs/开发全过程.md)。
 
 ## 兼容性与已知边界
 

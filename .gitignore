@@ -19,9 +19,10 @@ run/
 # 上游 mod 的 jar 一律不提交，用 scripts/fetch-libs.ps1 获取，详见 libs/README.md
 libs/*.jar
 
-# ---- 开发期调研资料 ----
-# 上游源码的逐字副本（AE2 / GTM），仅本地查阅用，不随仓库分发
+# ---- 开发期资料（不随仓库分发）----
+# 上游源码的逐字副本、内部 API 调研笔记等，仅本地查阅用
 refsrc/
+devnotes/
 
 # ---- 临时文件 ----
 .tmp*/

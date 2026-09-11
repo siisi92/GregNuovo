@@ -1,7 +1,6 @@
 # libs —— 本地编译依赖
 
-本目录的 jar **只用于编译与开发环境运行**，不会打包进 `GregNuovo` 产物；
-正式游玩时这些 mod 由整合包提供。**jar 已被 `.gitignore` 排除，请不要提交到仓库。**
+本目录的 jar **只用于编译与开发环境运行**，不会打包进 `GregNuovo` 产物；正式游玩时这些 mod 由整合包提供。**jar 已被 `.gitignore` 排除，请不要提交到仓库。**
 
 ## 一键获取
 
@@ -11,8 +10,7 @@ powershell -ExecutionPolicy Bypass -File scripts\fetch-libs.ps1
 
 （装了 PowerShell 7 的话也可以用 `pwsh -File scripts/fetch-libs.ps1`。）
 
-脚本会按下表下载到本目录（文件名必须一致——`build.gradle` 按文件名引用）。
-如果你电脑上已经有装好这些 mod 的整合包，也可以直接从实例的 `mods/` 目录复制过来，不必联网。
+脚本会按下表下载到本目录（文件名必须一致——`build.gradle` 按文件名引用）。如果你电脑上已经有装好这些 mod 的整合包，也可以直接从实例的 `mods/` 目录复制过来，不必联网。
 
 ## 文件清单
 

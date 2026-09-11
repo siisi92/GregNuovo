@@ -1,7 +1,6 @@
 # 第三方组件与许可
 
-本模组**不包含**任何上游模组的源码、资源或 jar。它通过「编译期引用 API + 运行时 Mixin 注入」与下列项目协作，
-发布产物（`gregnuovo-*.jar`）内只有本仓库自己的代码与资源。
+本模组**不包含**任何上游模组的源码、资源或 jar。它通过「编译期引用 API + 运行时 Mixin 注入」与下列项目协作，发布产物（`gregnuovo-*.jar`）内只有本仓库自己的代码与资源。
 
 | 项目 | 版本 | 许可 | 本模组如何使用 |
 | --- | --- | --- | --- |
@@ -20,14 +19,10 @@
 * 运行时链接的是整合包里已有的 AE2 / GTM jar（对应 LGPL-3.0 §4(d)(1) 的“共享库机制”），
   用户可以自行替换成接口兼容的修改版本；
 * 若你以整合包形式**同时分发**本模组与 AE2 / GTM，请按 LGPL-3.0 §4(b) 随附
-  [GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.txt) 与
-  [GNU LGPL v3](https://www.gnu.org/licenses/lgpl-3.0.txt) 文本
-  （AE2 / GTM 自身的发布物中也已包含其许可声明）。
+  [GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.txt) 与[GNU LGPL v3](https://www.gnu.org/licenses/lgpl-3.0.txt) 文本（AE2 / GTM 自身的发布物中也已包含其许可声明）。
 
 ## 声明
 
-本模组是**非官方附属**，与 Applied Energistics 2 团队、GregTech Modern (GregTechCEu) 团队
-均无隶属、合作或背书关系。名称中出现的 “GregTech”“Applied Energistics”“AE2” 仅用于说明兼容对象；
-本项目**不使用**上述项目的 logo、贴图或其它美术资源。
+本模组是**非官方附属**，与 Applied Energistics 2 团队、GregTech Modern (GregTechCEu) 团队均无隶属、合作或背书关系。名称中出现的 “GregTech”“Applied Energistics”“AE2” 仅用于说明兼容对象；本项目**不使用**上述项目的 logo、贴图或其它美术资源。
 
 “Minecraft” 是 Mojang Studios 的商标；本项目与 Mojang Studios / Microsoft 无关联。

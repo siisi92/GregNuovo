@@ -2,17 +2,11 @@
 
 <img src="src/main/resources/icon.png" width="96" alt="GregNuovo icon">
 
-![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-3c8527)
-![Forge](https://img.shields.io/badge/Forge-47.4.10-e08a3c)
-![GTM](https://img.shields.io/badge/GregTech%20Modern-7.3.0-6b6b6b)
-![AE2](https://img.shields.io/badge/Applied%20Energistics%202-15.4.x-2f6f9f)
-![License](https://img.shields.io/badge/License-LGPL--3.0-blue)
-![Version](https://img.shields.io/badge/version-1.1.0-informational)
+![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-3c8527) ![Forge](https://img.shields.io/badge/Forge-47.4.10-e08a3c) ![GTM](https://img.shields.io/badge/GregTech%20Modern-7.3.0-6b6b6b) ![AE2](https://img.shields.io/badge/Applied%20Energistics%202-15.4.x-2f6f9f) ![License](https://img.shields.io/badge/License-LGPL--3.0-blue) ![Version](https://img.shields.io/badge/version-1.1.0-informational)
 
 **把 AE2 的自动合成和 GregTech Modern 的机器真正接起来的附属模组。**
 
-编程电路自动写进机器 · 概率副产物按需重试 · 不需要的副产物不再空等 ·
-不消耗的模具/催化剂自动回网 · 样板里写出的副产物也能被 AE 识别与自动合成。
+编程电路自动写进机器 · 概率副产物按需重试 · 不需要的副产物不再空等 · 不消耗的模具/催化剂自动回网 · 样板里写出的副产物也能被 AE 识别与自动合成。
 
 > 本模组**不添加任何方块和物品**，它只改善「AE2 样板供应器 / GTM ME样板总成」与「GT 机器」之间的配合。
 > 支持单方块机器、多方块 + 输入总线 / ME输入总线、以及 GTM ME样板总成三种结构。
@@ -114,8 +108,7 @@
    机器是否真的开过工、退料扫描与退回次数、挂起记录卡在哪个阶段；
 2. **`misc.debugLog = true`** —— 日志里 `GregNuovo：` 开头的行会说明每一步的判断依据。
 
-对照表与常见现象见 [docs/使用说明.md](docs/使用说明.md) 第 5 节、
-[docs/需求实现说明.md](docs/需求实现说明.md) 第 10 节。
+对照表与常见现象见 [docs/使用说明.md](docs/使用说明.md) 第 5 节、[docs/需求实现说明.md](docs/需求实现说明.md) 第 10 节。
 
 ## 从源码构建
 
@@ -140,12 +133,9 @@ powershell -ExecutionPolicy Bypass -File scripts\publish-to-github.ps1 `
     -UserName <提交用名字> -UserEmail <提交用邮箱>
 ```
 
-脚本会：预检 git 与 GitHub 连通性 → `git init` + 提交（自动拒绝把 `libs/*.jar`、`refsrc/`、`build/` 提交进去）
-→ 设置 `origin` → `git push`。仓库还不存在时可加 `-CreateRepo GregNuovo`（需已安装并登录 GitHub CLI）。
-只想在本地建好仓库、暂不推送，加 `-SkipPush`。
+脚本会：预检 git 与 GitHub 连通性 → `git init` + 提交（自动拒绝把 `libs/*.jar`、`refsrc/`、`build/` 提交进去） → 设置 `origin` → `git push`。仓库还不存在时可加 `-CreateRepo GregNuovo`（需已安装并登录 GitHub CLI）。只想在本地建好仓库、暂不推送，加 `-SkipPush`。
 
-前置条件只有两个：**装了 Git**，以及**这台机器能访问 github.com**
-（若 hosts 里把 github 指向了 127.0.0.1，脚本会直接指出文件路径与处理办法）。
+前置条件只有两个：**装了 Git**，以及**这台机器能访问 github.com**（若 hosts 里把 github 指向了 127.0.0.1，脚本会直接指出文件路径与处理办法）。
 
 ## 项目结构
 
@@ -172,10 +162,7 @@ docs/                            使用说明、实现说明、注入点核对�
 scripts/fetch-libs.ps1           依赖 jar 下载脚本
 ```
 
-Mixin 注入点全部针对真实 jar 用 `javap` 逐条核对过，结果保存在
-[docs/mixin-target-audit.txt](docs/mixin-target-audit.txt)；对 AE2 15.4.10 与 GTM 7.3.0 的
-API 调研（含精确类名/方法/字段）在 [docs/research](docs/research)；
-从需求澄清到发布准备的完整过程记录见 [docs/开发全过程.md](docs/开发全过程.md)。
+Mixin 注入点全部针对真实 jar 用 `javap` 逐条核对过，结果保存在[docs/mixin-target-audit.txt](docs/mixin-target-audit.txt)；对 AE2 15.4.10 与 GTM 7.3.0 的 API 调研（含精确类名/方法/字段）在 [docs/research](docs/research)；从需求澄清到发布准备的完整过程记录见 [docs/开发全过程.md](docs/开发全过程.md)。
 
 ## 兼容性与已知边界
 
@@ -205,17 +192,14 @@ API 调研（含精确类名/方法/字段）在 [docs/research](docs/research)�
 
 * 本模组以 **LGPL-3.0** 发布，见 [LICENSE](LICENSE)；第三方组件与合规说明见 [THIRD-PARTY.md](THIRD-PARTY.md)。
 * 通过 Mixin 注入 [Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2)
-  （API 为 MIT，实现为 LGPL-3.0）与 [GregTech Modern](https://github.com/GregTechCEu/GregTech-Modern)（LGPL-3.0）
-  的内部实现，**不包含**两者的任何源码或资源；`libs/` 下的 jar 仅为编译依赖，不随仓库分发、也不打包进产物。
+  （API 为 MIT，实现为 LGPL-3.0）与 [GregTech Modern](https://github.com/GregTechCEu/GregTech-Modern)（LGPL-3.0）的内部实现，**不包含**两者的任何源码或资源；`libs/` 下的 jar 仅为编译依赖，不随仓库分发、也不打包进产物。
 * 本项目为非官方附属，与上述两个团队无隶属关系。
 
 ---
 
 ## English
 
-**GregNuovo** is a small Forge 1.20.1 addon that makes AE2 autocrafting work properly with
-GregTech Modern machines (single-block machines, multiblocks with input/ME input buses, and GTM's ME
-Pattern Buffer):
+**GregNuovo** is a small Forge 1.20.1 addon that makes AE2 autocrafting work properly with GregTech Modern machines (single-block machines, multiblocks with input/ME input buses, and GTM's ME Pattern Buffer):
 
 1. non-consumed recipe inputs (molds, catalysts) are returned to the ME network after the craft;
 2. the programmed circuit encoded in a pattern is written into the machine's circuit slot
@@ -224,8 +208,4 @@ Pattern Buffer):
 4. byproducts the job does *not* need are never waited for;
 5. every output written in a pattern becomes requestable/craftable in the AE network.
 
-No new blocks or items. Built against Forge 47.4.10, GregTech Modern 1.20.1-7.3.0, AE2 15.4.10.
-Diagnostics: `/gregnuovo status` (OP) plus `misc.debugLog = true`.
-Licensed under LGPL-3.0.
-#   G r e g N u o v o  
- 
+No new blocks or items. Built against Forge 47.4.10, GregTech Modern 1.20.1-7.3.0, AE2 15.4.10. Diagnostics: `/gregnuovo status` (OP) plus `misc.debugLog = true`. Licensed under LGPL-3.0. #   G r e g N u o v o    

@@ -31,8 +31,7 @@
 ### 重要环境限制
 `web_fetch` 的传输层对单个响应体有 **≈100 KB 的硬上限**。`src/main/java/com/gregtechceu/gtceu/common/data/GTItems.java` 全文 **162503 字节**，只能取回前 **100001 字节（61.5%，到第 1637 行，止于 `CAPACITOR = REGISTRATE.item("capaci` 一行中间）**；`PROGRAMMED_CIRCUIT` 的声明位于**不可达的尾部**（第 100002-162503 字节），因此 `GTItems.PROGRAMMED_CIRCUIT` 的**注册语句原文与行号无法核实**（本报告显式标注为【部分核实】）。
 
-已尝试并**全部失败**的绕行路线：`raw.githubusercontent.com`、`cdn.jsdelivr.net`（两者在同**字节**处截断）、GitHub contents/blob API（base64 反而更大 4/3）、`#L1500-L1700` 片段（被忽略）、grep.app（429）、Sourcegraph（被防火墙 403）、emgithub（返回 JS）。`web_fetch` **不支持 Range 请求头**。
-**替代方案（已采用）**：工作区内已存在**同版本编译产物** `libs\gtceu-1.20.1-7.3.0.jar`。本报告第 1.1 节关于 `gtceu:programmed_circuit` 的结论即从该 jar 的 `GTItems.class` 常量池中直接读出（已在本地独立复核）。若还需 `.java` 原文，只能在能自由联网的构建机上执行 `Invoke-WebRequest -Uri <raw url> -OutFile ...\GTItems.java`，验收标准为**恰好 162503 字节且以 `}` 结尾**。
+已尝试并**全部失败**的绕行路线：`raw.githubusercontent.com`、`cdn.jsdelivr.net`（两者在同**字节**处截断）、GitHub contents/blob API（base64 反而更大 4/3）、`#L1500-L1700` 片段（被忽略）、grep.app（429）、Sourcegraph（被防火墙 403）、emgithub（返回 JS）。`web_fetch` **不支持 Range 请求头**。 **替代方案（已采用）**：工作区内已存在**同版本编译产物** `libs\gtceu-1.20.1-7.3.0.jar`。本报告第 1.1 节关于 `gtceu:programmed_circuit` 的结论即从该 jar 的 `GTItems.class` 常量池中直接读出（已在本地独立复核）。若还需 `.java` 原文，只能在能自由联网的构建机上执行 `Invoke-WebRequest -Uri <raw url> -OutFile ...\GTItems.java`，验收标准为**恰好 162503 字节且以 `}` 结尾**。
 
 其余所有被要求的文件均已**完整、逐字节**取回（并用 GitHub API 的 `size` 字段逐个比对确认未被截断或重排）。
 
@@ -49,6 +48,7 @@
   - **证据 1（本地同版本编译产物，最强）**：工作区内的 `libs\gtceu-1.20.1-7.3.0.jar` 里 `com/gregtechceu/gtceu/common/data/GTItems.class`（140489 字节）常量池中，`programmed_circuit` / `PROGRAMMED_CIRCUIT` / `Programmed Circuit` / `circuit` / `IntCircuitBehaviour` / `getCircuitConfiguration` **各出现 1 次**；常量的原始排布为
     `… uv_solar_panel, "Ultimate Voltage Solar Panel", ®, programmed_circuit, "Programmed Circuit", "circuit", … gelled_toluene, "Gelled Toluene", purple_drink, "Purple Drink" …`
     —— 完全符合 `REGISTRATE.item("programmed_circuit", …).lang("Programmed Circuit")` 的注册形态，且与 `IntCircuitBehaviour` 绑定。这是**同版本 mod 的编译产物**，可信度远高于第三方资料；唯一保留意见是它来自 `.class` 而非 `.java` 源码文本。
+
   - **证据 2（源码侧引用）**：`IntCircuitBehaviour` 与 `IntCircuitIngredient` 均通过 `GTItems.PROGRAMMED_CIRCUIT` 引用该物品（`common/item/IntCircuitBehaviour.java:41`、`api/recipe/ingredient/IntCircuitIngredient.java:51`）。
   - **证据 3（外部佐证）**：MC 百科 GTM 编程电路词条给出游戏内命令 `/give @p gtceu:programmed_circuit 64`（<https://www.mcmod.cn/item/772155.html>）。
   - **仍未核实的一点**：`GTItems.java` 源码中该注册语句的**行号与逐字原文**（原因见第 0 节；该文件超过 `web_fetch` 传输上限）。
@@ -254,11 +254,9 @@ protected NotifiableItemStackHandler createCircuitItemHandler(Object... args) {
 }
 ```
 
-**关键：`new NotifiableItemStackHandler(this, 1, IO.IN, IO.NONE)` 的第四个参数是 `capabilityIO = IO.NONE`。**
-这直接决定第 3 节的结论——电路槽**不通过 Forge capability 暴露**。
+**关键：`new NotifiableItemStackHandler(this, 1, IO.IN, IO.NONE)` 的第四个参数是 `capabilityIO = IO.NONE`。** 这直接决定第 3 节的结论——电路槽**不通过 Forge capability 暴露**。
 
-**单方块电动机器**（例如研磨机 `RockCrusherMachine extends SimpleTieredMachine`）继承链为：
-`SimpleTieredMachine extends WorkableTieredMachine implements …, IHasCircuitSlot`（`api/machine/SimpleTieredMachine.java`，类声明处），其电路槽同样由 `createCircuitItemHandler` 创建：
+**单方块电动机器**（例如研磨机 `RockCrusherMachine extends SimpleTieredMachine`）继承链为： `SimpleTieredMachine extends WorkableTieredMachine implements …, IHasCircuitSlot`（`api/machine/SimpleTieredMachine.java`，类声明处），其电路槽同样由 `createCircuitItemHandler` 创建：
 
 ```java
 protected NotifiableItemStackHandler createCircuitItemHandler(Object... args) {   // SimpleTieredMachine
@@ -322,8 +320,7 @@ if (machine instanceof IHasCircuitSlot circuitMachine
 
 补充：
 - 若只想改数值而不换物品实例（保留其它 NBT），可用
-  `ItemStack s = inv.getStackInSlot(0); if (IntCircuitBehaviour.isIntegratedCircuit(s)) { IntCircuitBehaviour.setCircuitConfiguration(s, n); inv.setStackInSlot(0, s); }`
-  —— 这正是 `CircuitFancyConfigurator` 的按钮逻辑（`api/machine/fancyconfigurator/CircuitFancyConfigurator.java:131-141`）。
+  `ItemStack s = inv.getStackInSlot(0); if (IntCircuitBehaviour.isIntegratedCircuit(s)) { IntCircuitBehaviour.setCircuitConfiguration(s, n); inv.setStackInSlot(0, s); }` —— 这正是 `CircuitFancyConfigurator` 的按钮逻辑（`api/machine/fancyconfigurator/CircuitFancyConfigurator.java:131-141`）。
 - 清除电路：`inv.setStackInSlot(0, ItemStack.EMPTY)`（仅当 `ConfigHolder.INSTANCE.machines.ghostCircuit == true` 时 GT 自己的 GUI 才允许空电路；**但代码层面 `setStackInSlot` 不做这个检查**）。
 
 ### 3.2 ❌ 不推荐 / 需注意的路径
@@ -339,8 +336,7 @@ if (machine instanceof IHasCircuitSlot circuitMachine
 
 ### 3.3 关于“哪一个槽位是电路槽”
 
-**不存在一个稳定的“NBT 槽位索引”可以从外部推导**：电路槽是**独立的 `NotifiableItemStackHandler` 实例**（1 格），通过 `IHasCircuitSlot#getCircuitInventory()` 暴露，在 Forge capability 聚合视图中**根本不可见**（见上表）。
-因此：
+**不存在一个稳定的“NBT 槽位索引”可以从外部推导**：电路槽是**独立的 `NotifiableItemStackHandler` 实例**（1 格），通过 `IHasCircuitSlot#getCircuitInventory()` 暴露，在 Forge capability 聚合视图中**根本不可见**（见上表）。因此：
 - 通过 capability 访问时，**没有“电路槽索引”这个概念**；
 - 通过代码访问时，索引恒为 `0`（`circuitInventory.setStackInSlot(0, …)`）。
 
@@ -540,8 +536,7 @@ public void onRecipeFinish() {
    - 更稳的组合：记录上一 tick 的 `getConsecutiveRecipes()` + `getLastRecipe()` 引用是否改变。
 3. **无需 Mixin 的“产出后”钩子**：给输出槽/输出总线注册 `addChangedListener`（`NotifiableRecipeHandlerTrait#addChangedListener(Runnable)`，public，返回 `ISubscription`），在产出写入时立即被回调。适合“产出后立刻回收”的场景。
 
-`IRecipeLogicMachine` 还提供了一组**可被定义回调用**的钩子（都是 `default` 方法，public）：
-`beforeWorking(@Nullable GTRecipe)`（第 80 行）、`onWorking()`（第 87 行）、`onWaiting()`（第 94 行）、`afterWorking()`（第 101 行）、`notifyStatusChanged(RecipeLogic.Status oldStatus, RecipeLogic.Status newStatus)`（第 37 行）。
+`IRecipeLogicMachine` 还提供了一组**可被定义回调用**的钩子（都是 `default` 方法，public）： `beforeWorking(@Nullable GTRecipe)`（第 80 行）、`onWorking()`（第 87 行）、`onWaiting()`（第 94 行）、`afterWorking()`（第 101 行）、`notifyStatusChanged(RecipeLogic.Status oldStatus, RecipeLogic.Status newStatus)`（第 37 行）。
 
 ---
 
@@ -587,8 +582,7 @@ public static int getMaxChancedValue() {
 - 配方 builder 的默认值：`@Setter public int chance = ChanceLogic.getMaxChancedValue();`、`@Setter public int maxChance = ChanceLogic.getMaxChancedValue();`、`@Setter public int tierChanceBoost = 0;`（`data/recipe/builder/GTRecipeBuilder.java`）。
 - `maxChance` 允许不是 10000（例如用 `chancedOutput(ItemStack, String fraction, int tierChanceBoost)` 写分数），所以**永远用 `chance / (float) maxChance` 算百分比**，不要假设分母是 10000。GT 自己的 GUI 就是 `float chance = (float) getBoostedChance(...) / content.maxChance;`（`ItemRecipeCapability.applyWidgetInfo`）。
 
-对应 builder 方法（`data/recipe/builder/GTRecipeBuilder.java`）：`chancedInput(ItemStack, int, int)` L725、`chancedInput(FluidStack, int, int)` L739、**`chancedOutput(ItemStack, int chance, int tierChanceBoost)` L753**、`chancedOutput(FluidStack, int, int)` L767、`chancedOutput(TagPrefix, Material, int, int)` L781、`chancedOutput(ItemStack, String fraction, int)` L789。它们一律采用“保存旧 chance → 设置 → 调用 outputXXX → 还原”的模式，并由 `protected boolean checkChanceAndPrintError(int chance)` 校验（chance 必须 `> 0` 且 `<= 10000`）。
-**注意：不存在 `chancedOutputs(...)` 方法。**
+对应 builder 方法（`data/recipe/builder/GTRecipeBuilder.java`）：`chancedInput(ItemStack, int, int)` L725、`chancedInput(FluidStack, int, int)` L739、**`chancedOutput(ItemStack, int chance, int tierChanceBoost)` L753**、`chancedOutput(FluidStack, int, int)` L767、`chancedOutput(TagPrefix, Material, int, int)` L781、`chancedOutput(ItemStack, String fraction, int)` L789。它们一律采用“保存旧 chance → 设置 → 调用 outputXXX → 还原”的模式，并由 `protected boolean checkChanceAndPrintError(int chance)` 校验（chance 必须 `> 0` 且 `<= 10000`）。 **注意：不存在 `chancedOutputs(...)` 方法。**
 
 ### 6.3 概率逻辑与 boost
 
@@ -1015,8 +1009,7 @@ public void refund() {
 | `MEPatternBufferPartMachine#refundAll(ClickData clickData)` | **private**（第 245 行） | GUI 按钮（`ButtonConfigurator` 绑定 `this::refundAll`，第 275 行），遍历 27 个槽全部 `refund()` |
 | `MEPatternBufferPartMachine#onPatternChange(int index)` | **private**（第 250 行） | 某槽的样板被替换/清空时，对该槽 `internalInv.refund()` |
 
-**结论（对 addon 极其关键）：7.3.0 中没有任何“合成结束后自动退回残留”的逻辑。** 残留物（例如 notConsumable 输入、概率产出未命中时对应的未消耗部分、以及已推入但本配方根本没用到的多余原料）会一直留在 `InternalSlot.itemInventory` 里，直到玩家按 GUI 的“refund all”按钮或换样板。
-→ 需求 (b)/(d) 必须由 addon 自己调用 `refund()`（它是 **public**，可直接调用；`InternalSlot` 也是 public 内部类，见 8.7）。
+**结论（对 addon 极其关键）：7.3.0 中没有任何“合成结束后自动退回残留”的逻辑。** 残留物（例如 notConsumable 输入、概率产出未命中时对应的未消耗部分、以及已推入但本配方根本没用到的多余原料）会一直留在 `InternalSlot.itemInventory` 里，直到玩家按 GUI 的“refund all”按钮或换样板。 → 需求 (b)/(d) 必须由 addon 自己调用 `refund()`（它是 **public**，可直接调用；`InternalSlot` 也是 public 内部类，见 8.7）。
 
 ### 8.6 共享电路槽在配方匹配中的参与方式（需求 (c) 的核心）
 
@@ -1045,8 +1038,7 @@ public void refund() {
 
 - 目标：`com.gregtechceu.gtceu.integration.ae2.machine.MEPatternBufferPartMachine`（**public，非 final**）。
 - 用 `@Mixin(MEPatternBufferPartMachine.class)` 添加
-  `@Unique @Persisted`（LDLib2 SyncData 注解可与 Mixin 共存，但需自行注册 `ManagedFieldHolder`，风险较高）
-  或更安全：用 `@Unique` 普通字段 + 自行在 `saveCustomPersistedData/loadCustomPersistedData`（`MachineTrait` 层）或 `MEPatternBufferPartMachine` 的 `serializeNBT` 路径里持久化。
+  `@Unique @Persisted`（LDLib2 SyncData 注解可与 Mixin 共存，但需自行注册 `ManagedFieldHolder`，风险较高）或更安全：用 `@Unique` 普通字段 + 自行在 `saveCustomPersistedData/loadCustomPersistedData`（`MachineTrait` 层）或 `MEPatternBufferPartMachine` 的 `serializeNBT` 路径里持久化。
 - 再在 `getRecipeHandlers()`（**public**，签名 `()Ljava/util/List;`）`RETURN` 处，把返回的 27 个 `SlotRHL` 逐一“打补丁”。
 
 > **可行性提示**：`InternalSlotRecipeHandler` 本身是 **`public final class`** → **不能继承，但可以 Mixin**。`SlotRHL` 是 **protected static、非 final** → 可 Mixin。`SlotItemRecipeHandler` / `SlotFluidRecipeHandler` 是 **`private static class`** → 只能通过 `@Mixin(targets = "...$SlotItemRecipeHandler")` 字符串定位，且引用其类型时需要用 `Object`/`IRecipeHandlerTrait` 等公共父类型。
@@ -1061,8 +1053,7 @@ public void refund() {
 #### (ii) 概率产出缺失时重推样板
 
 - **推荐注入点：`MEPatternBufferPartMachine#pushPattern`**
-  描述符：`(Lappeng/api/crafting/IPatternDetails;[Lappeng/api/stacks/KeyCounter;)Z`
-  用途：记录“最近一次推送的样板 + 原料 + 目标槽”，供后续补偿逻辑使用。
+  描述符：`(Lappeng/api/crafting/IPatternDetails;[Lappeng/api/stacks/KeyCounter;)Z` 用途：记录“最近一次推送的样板 + 原料 + 目标槽”，供后续补偿逻辑使用。
   - `@Inject(method = "pushPattern", at = @At("RETURN"), cancellable = false)` —— 读参数即可（`IPatternDetails` 与 `KeyCounter[]` 都是方法参数，可直接拿）。
 - **触发补偿的地方（二选一）**：
   - ① `RecipeLogic#onRecipeFinish()V`（`api/machine/trait/RecipeLogic.java:484`，**public**）——多方的 `recipeLogic` 是 `WorkableMultiblockMachine` 的 `public final RecipeLogic recipeLogic`（`@Getter`），可直接访问。注入 `TAIL` 后检查：本次 `logic.getLastRecipe()` 的 `ItemRecipeCapability.CAP` 输出中，哪些 `isChanced()` 的产出**没有**出现在输出总线里 → 对该样板调用 `slot.pushPattern(...)` 重推（或直接再次触发 AE 的 `ICraftingProvider` 流程）。
@@ -1343,8 +1334,7 @@ public class GTRegistration {
 | `multiblockPreviewRenderer(boolean, ...)` | 491 |
 | **`register()`** | **533** —— 终端方法，`public DEFINITION register()`，内部把机器注册进 `GTRegistries.MACHINES` |
 
-**重要**：`MachineBuilder` **没有任何静态工厂方法**（没有 `create` / `createMultiblock`）。唯一入口是 **public 构造器（第 188 行）** 与 **`GTRegistrate#machine(...)` / `#multiblock(...)`**。
-多方块用 **`MultiblockMachineBuilder`**（`api/registry/registrate/MultiblockMachineBuilder.java`，509 行），额外提供 `.pattern(...)` / `.shapeInfo(...)` / `.appearanceBlock(...)` / `.partAppearance(...)` / `.allowFlip(...)`；若未设置 pattern，`register()` 会抛 `IllegalStateException("missing pattern while creating multiblock ")`。
+**重要**：`MachineBuilder` **没有任何静态工厂方法**（没有 `create` / `createMultiblock`）。唯一入口是 **public 构造器（第 188 行）** 与 **`GTRegistrate#machine(...)` / `#multiblock(...)`**。多方块用 **`MultiblockMachineBuilder`**（`api/registry/registrate/MultiblockMachineBuilder.java`，509 行），额外提供 `.pattern(...)` / `.shapeInfo(...)` / `.appearanceBlock(...)` / `.partAppearance(...)` / `.allowFlip(...)`；若未设置 pattern，`register()` 会抛 `IllegalStateException("missing pattern while creating multiblock ")`。
 
 ### 10.3 最小可用片段（**直接从 7.3.0 源码改写，已验证 API 存在**）
 
@@ -1448,7 +1438,7 @@ public static final MachineDefinition[] TEST_ELECTRIC = new SimpleMachineBuilder
 | 类 | 完整名 | 修饰符 | Java 继承 | Mixin | 备注 |
 | --- | --- | --- | --- | --- | --- |
 | `MEPatternBufferPartMachine` | `com.gregtechceu.gtceu.integration.ae2.machine.MEPatternBufferPartMachine` | **`public`，非 `final`** | ✅ 可继承 | ✅ | 有 `public MEPatternBufferPartMachine(IMachineBlockEntity holder, Object... args)` 构造器 |
-| `MEPatternBufferPartMachine.InternalSlot` | `…MEPatternBufferPartMachine$InternalSlot` | **`public`，非 `final`，非 `static`（内部类！）** | ✅ 可继承（但需 outer 实例） | ⚠️ 可 Mixin，但**非静态内部类**：Mixin 需用 `@Mixin(targets = "…MEPatternBufferPartMachine$InternalSlot")`；若需访问外部实例，注意 `this$0` 合成字段。**建议优先 Mixin 外层类。** |
+| `MEPatternBufferPartMachine.InternalSlot` | `…MEPatternBufferPartMachine$InternalSlot` | **`public`，非 `final`，非 `static`（内部类！）** | ✅ 可继承（但需 outer 实例） | ⚠️ 需用 `@Mixin(targets = "…MEPatternBufferPartMachine$InternalSlot")` | **非静态内部类**：访问外部实例要当心 `this$0` 合成字段；建议优先 Mixin 外层类 |
 | `MEBusPartMachine` | `…integration.ae2.machine.MEBusPartMachine` | **`public abstract`** | ✅ 可继承 | ✅ | |
 | `ItemBusPartMachine` | `…common.machine.multiblock.part.ItemBusPartMachine` | **`public`，非 `final`** | ✅ | ✅ | |
 | `InternalSlotRecipeHandler` | `…integration.ae2.machine.trait.InternalSlotRecipeHandler` | **`public final`** | ❌ 不能继承 | ✅ | 只能 Mixin 或整体替换 |
@@ -1574,14 +1564,7 @@ handleItemInternal= "(Ljava/util/List;Z)Ljava/util/List;"
 
 ### A.2 额外抓取的支撑文件（用于保证第 2-11 节结论正确）
 
-`integration/ae2/machine/MEPatternBufferPartMachine.java`、`integration/ae2/machine/trait/GridNodeHolder.java`、`integration/ae2/machine/trait/ProxySlotRecipeHandler.java`、`integration/ae2/machine/feature/multiblock/IAutoPullPart.java`、`integration/ae2/machine/feature/multiblock/IMEStockingPart.java`、
-`api/machine/trait/{NotifiableFluidTank,NotifiableRecipeHandlerTrait,IRecipeHandlerTrait,MachineTrait,ICapabilityTrait,RecipeHandlerGroup,RecipeHandlerGroupColor,RecipeHandlerGroupDistinctness}.java`、
-`api/machine/feature/{IHasCircuitSlot,IRecipeLogicMachine}.java`、`api/machine/feature/multiblock/{IDistinctPart,IMultiPart,IWorkableMultiController,IDisplayUIMachine,IFluidRenderMulti,IMaintenanceMachine,IMufflerMachine,IMufflerMechanic,IRotorHolderMachine}.java`、
-`api/machine/{MetaMachine,MachineDefinition,MultiblockMachineDefinition,WorkableTieredMachine,SimpleTieredMachine}.java`、`api/machine/multiblock/WorkableMultiblockMachine.java`、`api/machine/fancyconfigurator/CircuitFancyConfigurator.java`、`api/machine/trait/ICapabilityTrait.java`、
-`api/recipe/{GTRecipeType,RecipeHelper,RecipeRunner,ActionResult}.java`、`api/recipe/lookup/GTRecipeLookup.java`、`api/recipe/content/*`（12 个）、`api/recipe/ingredient/*`（7 个：`EnergyStack`、`FluidContainerIngredient`、`FluidIngredient`、`IntCircuitIngredient`、`IntProviderFluidIngredient`、`IntProviderIngredient`、`SizedIngredient`）、`api/recipe/chance/logic/ChanceLogic.java`、`api/recipe/chance/boost/ChanceBoostFunction.java`、
-`api/capability/recipe/{IO,RecipeCapability,ItemRecipeCapability,EURecipeCapability,IRecipeCapabilityHolder,IRecipeHandler,IFilteredHandler}.java`、
-`api/registry/GTRegistries.java`、`api/registry/GTRegistry.java`、`api/registry/registrate/{GTRegistrate,MachineBuilder,MultiblockMachineBuilder,BuilderBase,IGTFluidBuilder}.java`、`api/transfer/item/CustomItemStackHandler.java`、`api/GTCEuAPI.java`、
-`common/registry/GTRegistration.java`、`common/data/GTMachines.java`、`common/data/machines/GTMachineUtils.java`、`common/machine/multiblock/electric/{FluidDrillMachine,MultiblockTankMachine}.java`、`data/recipe/builder/GTRecipeBuilder.java`。
+`integration/ae2/machine/MEPatternBufferPartMachine.java`、`integration/ae2/machine/trait/GridNodeHolder.java`、`integration/ae2/machine/trait/ProxySlotRecipeHandler.java`、`integration/ae2/machine/feature/multiblock/IAutoPullPart.java`、`integration/ae2/machine/feature/multiblock/IMEStockingPart.java`、 `api/machine/trait/{NotifiableFluidTank,NotifiableRecipeHandlerTrait,IRecipeHandlerTrait,MachineTrait,ICapabilityTrait,RecipeHandlerGroup,RecipeHandlerGroupColor,RecipeHandlerGroupDistinctness}.java`、 `api/machine/feature/{IHasCircuitSlot,IRecipeLogicMachine}.java`、`api/machine/feature/multiblock/{IDistinctPart,IMultiPart,IWorkableMultiController,IDisplayUIMachine,IFluidRenderMulti,IMaintenanceMachine,IMufflerMachine,IMufflerMechanic,IRotorHolderMachine}.java`、 `api/machine/{MetaMachine,MachineDefinition,MultiblockMachineDefinition,WorkableTieredMachine,SimpleTieredMachine}.java`、`api/machine/multiblock/WorkableMultiblockMachine.java`、`api/machine/fancyconfigurator/CircuitFancyConfigurator.java`、`api/machine/trait/ICapabilityTrait.java`、 `api/recipe/{GTRecipeType,RecipeHelper,RecipeRunner,ActionResult}.java`、`api/recipe/lookup/GTRecipeLookup.java`、`api/recipe/content/*`（12 个）、`api/recipe/ingredient/*`（7 个：`EnergyStack`、`FluidContainerIngredient`、`FluidIngredient`、`IntCircuitIngredient`、`IntProviderFluidIngredient`、`IntProviderIngredient`、`SizedIngredient`）、`api/recipe/chance/logic/ChanceLogic.java`、`api/recipe/chance/boost/ChanceBoostFunction.java`、 `api/capability/recipe/{IO,RecipeCapability,ItemRecipeCapability,EURecipeCapability,IRecipeCapabilityHolder,IRecipeHandler,IFilteredHandler}.java`、 `api/registry/GTRegistries.java`、`api/registry/GTRegistry.java`、`api/registry/registrate/{GTRegistrate,MachineBuilder,MultiblockMachineBuilder,BuilderBase,IGTFluidBuilder}.java`、`api/transfer/item/CustomItemStackHandler.java`、`api/GTCEuAPI.java`、 `common/registry/GTRegistration.java`、`common/data/GTMachines.java`、`common/data/machines/GTMachineUtils.java`、`common/machine/multiblock/electric/{FluidDrillMachine,MultiblockTankMachine}.java`、`data/recipe/builder/GTRecipeBuilder.java`。
 
 > **完整性校验（重要）**：除 `GTItems.java` 外，所有文件均通过**字节数比对**（本地字节数 == GitHub API `size`，例如 `MEPatternBufferPartMachine.java` = 28110、`MEBusPartMachine.java` = 3043、`GTMachines.java` = 70957、`MachineBuilder.java` = 33033、`GTRegistrate.java` = 11739、`GTMachineUtils.java` = 60776）与**git blob SHA1 比对**（本地按 `"blob " + len + "\0" + content` 计算并与 GitHub trees API 的 sha 比较，抽查 27/27 完全一致）确认既未截断也未重排；另已复核关键文件**无 UTF-8 BOM、无 CRLF**。
 >

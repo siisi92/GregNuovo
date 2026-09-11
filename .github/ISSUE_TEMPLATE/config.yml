@@ -1,5 +1,0 @@
-blank_issues_enabled: true
-contact_links:
-  - name: 使用说明 / 常见问题
-    url: https://github.com/
-    about: 请先阅读 docs/使用说明.md 第 5 节与 docs/需求实现说明.md 第 10 节的排查对照表

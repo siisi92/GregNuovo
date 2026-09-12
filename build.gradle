@@ -29,8 +29,9 @@ def requiredLibs = [
 ]
 def missingLibs = requiredLibs.findAll { !file("${project.libs_dir}/${it}").exists() }
 if (!missingLibs.isEmpty()) {
-    def message = "缺少依赖 jar：${missingLibs.join(', ')}\n" +
-            "请先运行 scripts/fetch-libs.ps1，或参考 libs/README.md 手动放入 ${project.libs_dir}/ 目录。"
+    def message = "缺少编译所需的依赖 jar：${missingLibs.join('、')}\n" +
+            "请把它们放进 ${project.libs_dir}/ 目录（文件名要与上面 requiredLibs 里完全一致）。\n" +
+            "最省事的做法：直接从已装好这些 mod 的整合包实例的 mods/ 目录里复制过来。"
     def tasks = gradle.startParameter.taskNames.join(' ')
     def needsLibs = tasks.isEmpty() || ['build', 'jar', 'run', 'compile', 'test'].any { tasks.contains(it) }
     if (needsLibs) {

@@ -69,40 +69,6 @@
 | `misc.startTimeoutTicks` | `1200` | 机器迟迟不开工时记录一次日志的阈值 |
 | `misc.debugLog` | `false` | 输出每一步的判断日志 |
 
-## 从源码构建
-
-```bash
-git clone <本仓库地址>
-cd GregNuovo
-./gradlew build
-```
-
-依赖的第三方 mod 只用于编译与开发环境，**不会打包进产物、也不随仓库分发**；把它们按下列文件名放进 `libs/` 目录即可（也可以直接从已装好这些 mod 的整合包实例的 `mods/` 里复制）：
-
-| 文件 | 用途 |
-| --- | --- |
-| `gtceu-1.20.1-7.3.0.jar` | 编译 + 运行（GTM 不在 Modrinth，从 GitHub Release `v7.3.0-1.20.1` 下载） |
-| `appliedenergistics2-forge-15.4.10.jar` | 编译 + 运行（Modrinth `ae2`，forge / 1.20.1） |
-| `ldlib-forge-1.20.1-1.0.52.jar` | 编译 + 运行（GTM 前置） |
-| `architectury-9.2.14-forge.jar` | 编译 + 运行（LDLib 前置） |
-| `configuration-forge-1.20.1-3.1.0.jar` | 仅开发环境运行（GTM 前置） |
-| `guideme-20.1.15.jar` | 仅开发环境运行（AE2 前置） |
-
-需要 JDK 17+（用 JDK 21 运行 Gradle 也可以，编译目标已固定为 17）。
-
-## 实现方式
-
-共 11 个 Mixin：AE2 侧注入样板供应器、合成 CPU、合成索引与若干 accessor；GTM 侧注入 ME样板总成、配方完成回调与电路槽。注入点全部针对真实 jar 用 `javap` 逐条核对过（类名、方法描述符、私有字段、包私有内部类、`@Redirect` 调用点）。
-
-```
-src/main/java/com/gregnuovo/
-├── GregNuovo.java      模组入口、配置注册、事件与 /gregnuovo 命令
-├── config/             Forge 配置
-├── core/               纯逻辑层：目标识别、退料、概率产物重试、需求判定、诊断
-├── hook/               所有 Mixin 的统一入口
-└── mixin/{ae2,gtceu}/  AE2 / GTM 的注入点
-```
-
 ## 兼容性与已知边界
 
 * 只接管 **GT 机器**（实现 `IRecipeLogicMachine` 的机器与多方块控制器）；AE2 及其它 mod 的机器保持原版行为；

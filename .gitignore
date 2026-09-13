@@ -16,13 +16,17 @@ run/
 .gnative/
 
 # ---- 本地依赖 jar ----
-# 上游 mod 的 jar 一律不提交，用 scripts/fetch-libs.ps1 获取，详见 libs/README.md
+# 上游 mod 的 jar 一律不提交，从整合包实例的 mods/ 目录复制，详见各版本的 libs/README.md
 libs/*.jar
+1.21.1-neoforge/libs/*.jar
 
 # ---- 开发期资料（不随仓库分发）----
-# 上游源码的逐字副本、内部 API 调研笔记等，仅本地查阅用
+# 上游源码的逐字副本、内部 API 调研笔记、编译验证用的桩代码等，仅本地查阅用
 refsrc/
+refsrc1211/
 devnotes/
+docs1211/
+.verify/
 
 # ---- 临时文件 ----
 .tmp*/

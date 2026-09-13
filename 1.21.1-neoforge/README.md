@@ -135,7 +135,7 @@ src/main/resources/
 
 ## 许可与致谢
 
-* 本模组以 **LGPL-3.0** 发布，完整文本见仓库根目录 [LICENSE](../LICENSE)，源码随仓库公开；
+* 本模组以 **LGPL-3.0** 发布，完整文本见仓库根目录的 `LICENSE`，源码随仓库公开；
 * 通过 Mixin 注入 [Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2)（API 为 MIT、实现为 LGPL-3.0）与 [GregTech Modern](https://github.com/GregTechCEu/GregTech-Modern)（LGPL-3.0）的内部实现，**不包含**两者的任何源码、资源或 jar；
 * 运行时链接的是整合包里已有的 AE2 / GTM jar（对应 LGPL-3.0 §4(d)(1) 的"共享库机制"），用户可以自行替换成接口兼容的修改版本；
 * 本模组是**非官方附属**，与上述两个团队无隶属或背书关系，也不使用它们的 logo 或贴图；

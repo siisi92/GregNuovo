@@ -119,7 +119,11 @@ processResources {
 
 jar {
     // LGPL-3.0：把许可证随产物一起分发
+    // 子目录布局在 ../LICENSE；如果把本工程放到仓库根目录（例如单独的分支），则在 LICENSE
     def licenseFile = file('../LICENSE')
+    if (!licenseFile.exists()) {
+        licenseFile = file('LICENSE')
+    }
     if (licenseFile.exists()) {
         from(licenseFile) {
             rename { "LICENSE-${project.mod_id}" }

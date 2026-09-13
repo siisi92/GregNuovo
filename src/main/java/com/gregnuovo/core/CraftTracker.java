@@ -22,8 +22,6 @@ import appeng.api.networking.IGrid;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.server.ServerLifecycleHooks;
 
 import com.gregnuovo.GregNuovo;
 import com.gregnuovo.config.GNConfig;
@@ -122,14 +120,12 @@ public final class CraftTracker {
         return sb.toString();
     }
 
-    public static void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
+    public static void onServerTick(MinecraftServer server) {
         List<PendingCraft> snapshot;
         synchronized (PENDING) {
             if (PENDING.isEmpty()) return;
             snapshot = new ArrayList<>(PENDING);
         }
-        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
         if (server == null) return;
 
         List<PendingCraft> finished = new ArrayList<>();
@@ -312,7 +308,7 @@ public final class CraftTracker {
     private static void cleanup(ServerLevel level, PendingCraft craft, Resolved resolved) {
         GNDiagnostics.cleanupRuns.incrementAndGet();
         try {
-            returnLeftovers(craft, resolved);
+            returnLeftovers(level, craft, resolved);
         } catch (Throwable t) {
             GregNuovo.LOGGER.warn("GregNuovo：退回余料失败 {}", craft.describe(), t);
         }
@@ -326,7 +322,7 @@ public final class CraftTracker {
         } catch (Throwable ignored) {}
     }
 
-    private static void returnLeftovers(PendingCraft craft, Resolved resolved) {
+    private static void returnLeftovers(ServerLevel level, PendingCraft craft, Resolved resolved) {
         if (!GNConfig.leftoverReturn()) return;
 
         if (craft.kind == PendingCraft.Kind.MULTIBLOCK) {
@@ -347,7 +343,7 @@ public final class CraftTracker {
 
         GNDiagnostics.leftoverScans.incrementAndGet();
         MetaMachine host = resolved.itemHost();
-        List<GenericStack> leftovers = MachineAccess.extractLeftovers(host, host.getLevel(),
+        List<GenericStack> leftovers = MachineAccess.extractLeftovers(host, level,
                 host.getPos(), craft.machineSide, craft.pushed, craft.outputKeys, craft.leftoverKeys,
                 craft.cpu == null || !craft.cpu.hasJob(), craft.actionSource);
 

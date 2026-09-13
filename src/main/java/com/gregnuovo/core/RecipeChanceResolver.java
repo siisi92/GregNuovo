@@ -13,15 +13,15 @@ import org.jetbrains.annotations.Nullable;
 import com.gregtechceu.gtceu.api.capability.recipe.ItemRecipeCapability;
 import com.gregtechceu.gtceu.api.machine.MetaMachine;
 import com.gregtechceu.gtceu.api.machine.feature.IRecipeLogicMachine;
-import com.gregtechceu.gtceu.api.recipe.GTRecipe;
 import com.gregtechceu.gtceu.api.recipe.GTRecipeType;
 import com.gregtechceu.gtceu.api.recipe.content.Content;
-import com.gregtechceu.gtceu.api.recipe.ingredient.IntCircuitIngredient;
-import com.gregtechceu.gtceu.common.item.IntCircuitBehaviour;
+import com.gregtechceu.gtceu.api.recipe.kind.GTRecipe;
+import com.gregtechceu.gtceu.common.item.behavior.IntCircuitBehaviour;
 
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.neoforged.neoforge.common.crafting.SizedIngredient;
 
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.stacks.AEItemKey;
@@ -34,6 +34,11 @@ import appeng.api.stacks.GenericStack;
  * <p>AE2 的样板不保存概率值，因此这里的概率信息全部来自 GT 配方本身：
  * 依据机器可运行的配方类型，找出与样板输入/输出匹配的配方，读取其
  * {@link Content#isChanced()} 的输出。</p>
+ *
+ * <p>1.21.1 变化（GTM 1.21.1-7.0.x / NeoForge）：GT 的物品原料类型从 {@code Ingredient}
+ * 换成了 NeoForge 的 {@link SizedIngredient}（带数量），配方类也从
+ * {@code api.recipe.GTRecipe} 搬到了 {@code api.recipe.kind.GTRecipe}。
+ * 这里统一用 {@link #ingredientOf(Content)} / {@link #stacksOf(Content)} 做适配。</p>
  */
 public final class RecipeChanceResolver {
 
@@ -94,8 +99,7 @@ public final class RecipeChanceResolver {
         for (GTRecipe recipe : candidates(type, outputs, inputKeys)) {
             for (Content content : recipe.getOutputContents(ItemRecipeCapability.CAP)) {
                 if (!content.isChanced()) continue;
-                if (!(content.getContent() instanceof Ingredient ingredient)) continue;
-                for (ItemStack stack : ingredient.getItems()) {
+                for (ItemStack stack : stacksOf(content)) {
                     if (stack.isEmpty()) continue;
                     AEItemKey key = AEItemKey.of(stack);
                     if (key == null) continue;
@@ -118,7 +122,7 @@ public final class RecipeChanceResolver {
 
     private static String cacheKey(IPatternDetails details, GTRecipeType type) {
         var sb = new StringBuilder(128);
-        sb.append(type.getCategory() == null ? "?" : type.getCategory().toString());
+        sb.append(type.registryName == null ? "?" : type.registryName);
         sb.append('|');
         for (var out : PatternAnalyzer.outputs(details)) {
             sb.append(out.what().getId()).append('x').append(out.amount()).append(',');
@@ -147,14 +151,19 @@ public final class RecipeChanceResolver {
         return List.copyOf(result);
     }
 
+    /**
+     * 建索引：遍历该配方类型的全部配方。
+     *
+     * <p>{@code GTRecipeType.categoryMap} 由 {@code GTRecipeCategory#addRecipe} 在配方反序列化时填充，
+     * 因此这里能拿到全部已加载配方。</p>
+     */
     private static Map<Item, List<GTRecipe>> buildIndex(GTRecipeType type) {
         Map<Item, List<GTRecipe>> index = new HashMap<>();
         try {
             for (var entry : type.getCategoryMap().entrySet()) {
                 for (GTRecipe recipe : entry.getValue()) {
                     for (Content content : recipe.getOutputContents(ItemRecipeCapability.CAP)) {
-                        if (!(content.getContent() instanceof Ingredient ingredient)) continue;
-                        for (ItemStack stack : ingredient.getItems()) {
+                        for (ItemStack stack : stacksOf(content)) {
                             if (stack.isEmpty()) continue;
                             index.computeIfAbsent(stack.getItem(), k -> new java.util.ArrayList<>()).add(recipe);
                         }
@@ -171,8 +180,7 @@ public final class RecipeChanceResolver {
     private static boolean matches(GTRecipe recipe, List<GenericStack> outputs, List<AEKey> inputKeys) {
         boolean outputHit = false;
         for (Content content : recipe.getOutputContents(ItemRecipeCapability.CAP)) {
-            if (!(content.getContent() instanceof Ingredient ingredient)) continue;
-            for (ItemStack stack : ingredient.getItems()) {
+            for (ItemStack stack : stacksOf(content)) {
                 if (stack.isEmpty()) continue;
                 AEItemKey key = AEItemKey.of(stack);
                 if (key == null) continue;
@@ -187,8 +195,9 @@ public final class RecipeChanceResolver {
         if (!outputHit) return false;
 
         for (Content content : recipe.getInputContents(ItemRecipeCapability.CAP)) {
-            if (!(content.getContent() instanceof Ingredient ingredient)) continue;
-            if (ingredient instanceof IntCircuitIngredient) continue; // 电路由本模组单独处理
+            Ingredient ingredient = ingredientOf(content);
+            if (ingredient == null) continue;
+            if (isCircuitIngredient(ingredient)) continue; // 电路由本模组单独处理
             if (ingredient.isEmpty()) continue;
             boolean satisfied = false;
             for (AEKey key : inputKeys) {
@@ -205,8 +214,8 @@ public final class RecipeChanceResolver {
     /**
      * 需求2 的兜底：样板里没编编程电路时，从 GT 配方推断这台机器该用哪个电路。
      *
-     * <p>GT 用 {@code IntCircuitIngredient}（notConsumable）表达“该电路配方”，
-     * 其物品形态就是带 {@code Configuration} 标签的编程电路，可直接读出编号。</p>
+     * <p>GT 用编程电路作为配方输入（notConsumable，{@code chance == 0}）表达“该电路配方”，
+     * 其物品形态就是带 {@code CircuitConfiguration} 数据组件的编程电路，可直接读出编号。</p>
      */
     public static CircuitHint circuitHint(IPatternDetails details, @Nullable MetaMachine machine) {
         if (!(machine instanceof IRecipeLogicMachine logicMachine)) return CircuitHint.NONE;
@@ -227,8 +236,8 @@ public final class RecipeChanceResolver {
         Integer found = null;
         for (GTRecipe recipe : candidates(type, outputs, inputKeys)) {
             for (Content content : recipe.getInputContents(ItemRecipeCapability.CAP)) {
-                if (!(content.getContent() instanceof IntCircuitIngredient circuitIngredient)) continue;
-                ItemStack[] items = circuitIngredient.getItems();
+                if (!isCircuitIngredient(ingredientOf(content))) continue;
+                ItemStack[] items = stacksOf(content);
                 if (items.length == 0 || items[0].isEmpty()) continue;
                 int configuration = IntCircuitBehaviour.getCircuitConfiguration(items[0]);
                 needsCircuit = true;
@@ -270,9 +279,8 @@ public final class RecipeChanceResolver {
 
         for (GTRecipe recipe : candidates(type, outputs, inputKeys)) {
             for (Content content : recipe.getInputContents(ItemRecipeCapability.CAP)) {
-                if (content.chance != 0) continue; // 0 = notConsumable
-                if (!(content.getContent() instanceof Ingredient ingredient)) continue;
-                for (ItemStack stack : ingredient.getItems()) {
+                if (content.chance != 0) continue; // 0 = notConsumable（GT 界面上显示为 NC）
+                for (ItemStack stack : stacksOf(content)) {
                     if (stack.isEmpty()) continue;
                     AEItemKey key = AEItemKey.of(stack);
                     if (key == null) continue;
@@ -286,6 +294,50 @@ public final class RecipeChanceResolver {
             }
         }
         return result;
+    }
+
+    // ------------------------------------------------------------------
+    // 1.21.1 适配：物品原料从 Ingredient 变成 SizedIngredient
+    // ------------------------------------------------------------------
+
+    /** 取一个 Content 里的物品原料。 */
+    @Nullable
+    private static Ingredient ingredientOf(@Nullable Content content) {
+        if (content == null) return null;
+        try {
+            Object value = content.getContent();
+            if (value instanceof SizedIngredient sized) return sized.ingredient();
+            if (value instanceof Ingredient ingredient) return ingredient;
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    /** 取一个 Content 里可能出现的全部物品形态。 */
+    private static ItemStack[] stacksOf(@Nullable Content content) {
+        if (content == null) return new ItemStack[0];
+        try {
+            Object value = content.getContent();
+            if (value instanceof SizedIngredient sized) return sized.getItems();
+            if (value instanceof Ingredient ingredient) return ingredient.getItems();
+        } catch (Throwable ignored) {}
+        return new ItemStack[0];
+    }
+
+    /**
+     * 这个原料是不是编程电路。
+     *
+     * <p>这里刻意<b>不</b>用 {@code Ingredient#getCustomIngredient()}：那是 NeoForge 通过接口注入
+     * 挂到 vanilla {@code Ingredient} 上的方法，只有装好 NeoForge 的构建环境才解析得到；
+     * 直接看候选项的物品形态（编程电路的编号存在数据组件里）更稳。</p>
+     */
+    private static boolean isCircuitIngredient(@Nullable Ingredient ingredient) {
+        if (ingredient == null) return false;
+        try {
+            ItemStack[] items = ingredient.getItems();
+            return items.length > 0 && PatternAnalyzer.isCircuitStack(items[0]);
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private RecipeChanceResolver() {}

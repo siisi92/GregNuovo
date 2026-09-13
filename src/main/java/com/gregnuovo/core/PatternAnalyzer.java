@@ -5,7 +5,7 @@ import java.util.List;
 
 import org.jetbrains.annotations.Nullable;
 
-import com.gregtechceu.gtceu.common.item.IntCircuitBehaviour;
+import com.gregtechceu.gtceu.common.item.behavior.IntCircuitBehaviour;
 
 import net.minecraft.world.item.ItemStack;
 
@@ -93,8 +93,9 @@ public final class PatternAnalyzer {
 
     /** 样板的全部输出。 */
     public static List<GenericStack> outputs(IPatternDetails details) {
+        // 1.21.1（AE2 19.x）起 getOutputs() 返回 List<GenericStack>（15.x 是数组）
         var outs = details.getOutputs();
-        List<GenericStack> list = new ArrayList<>(outs.length);
+        List<GenericStack> list = new ArrayList<>(outs.size());
         for (var out : outs) {
             if (out != null && out.what() != null && out.amount() > 0) {
                 list.add(out);

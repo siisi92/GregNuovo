@@ -1,32 +1,32 @@
 package com.gregnuovo.config;
 
-import net.minecraftforge.common.ForgeConfigSpec;
+import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
  * GregNuovo 通用配置。
  */
 public final class GNConfig {
 
-    public static final ForgeConfigSpec SPEC;
+    public static final ModConfigSpec SPEC;
 
-    private static final ForgeConfigSpec.BooleanValue CIRCUIT_INJECTION;
-    private static final ForgeConfigSpec.BooleanValue CIRCUIT_STOCKLESS;
-    private static final ForgeConfigSpec.BooleanValue CIRCUIT_AUTO_DETECT;
-    private static final ForgeConfigSpec.BooleanValue CLEAR_CIRCUIT_WHEN_ABSENT;
-    private static final ForgeConfigSpec.BooleanValue CLEAR_CIRCUIT_AFTER_CRAFT;
-    private static final ForgeConfigSpec.BooleanValue LEFTOVER_RETURN;
-    private static final ForgeConfigSpec.BooleanValue CHANCED_RETRY;
-    private static final ForgeConfigSpec.IntValue MAX_CHANCED_RETRIES;
-    private static final ForgeConfigSpec.BooleanValue BYPRODUCT_AWARE;
-    private static final ForgeConfigSpec.BooleanValue BYPRODUCT_CRAFTABLE;
-    private static final ForgeConfigSpec.IntValue RETRY_INTERVAL_TICKS;
-    private static final ForgeConfigSpec.IntValue START_TIMEOUT_TICKS;
-    private static final ForgeConfigSpec.BooleanValue DEBUG_LOG;
+    private static final ModConfigSpec.BooleanValue CIRCUIT_INJECTION;
+    private static final ModConfigSpec.BooleanValue CIRCUIT_STOCKLESS;
+    private static final ModConfigSpec.BooleanValue CIRCUIT_AUTO_DETECT;
+    private static final ModConfigSpec.BooleanValue CLEAR_CIRCUIT_WHEN_ABSENT;
+    private static final ModConfigSpec.BooleanValue CLEAR_CIRCUIT_AFTER_CRAFT;
+    private static final ModConfigSpec.BooleanValue LEFTOVER_RETURN;
+    private static final ModConfigSpec.BooleanValue CHANCED_RETRY;
+    private static final ModConfigSpec.IntValue MAX_CHANCED_RETRIES;
+    private static final ModConfigSpec.BooleanValue BYPRODUCT_AWARE;
+    private static final ModConfigSpec.BooleanValue BYPRODUCT_CRAFTABLE;
+    private static final ModConfigSpec.IntValue RETRY_INTERVAL_TICKS;
+    private static final ModConfigSpec.IntValue START_TIMEOUT_TICKS;
+    private static final ModConfigSpec.BooleanValue DEBUG_LOG;
 
     static {
-        var b = new ForgeConfigSpec.Builder();
+        var b = new ModConfigSpec.Builder();
 
-        b.comment("GregNuovo —— AE2 与 GTM(1.20.1) 自动合成整合").push("gregnuovo");
+        b.comment("GregNuovo —— AE2 与 GTM(1.21.1) 自动合成整合").push("gregnuovo");
 
         b.comment("需求2：把样板内编码的 GT 编程电路写入机器电路槽，而不是当作普通物品推送。").push("circuit");
         CIRCUIT_INJECTION = b

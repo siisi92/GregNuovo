@@ -16,20 +16,24 @@ import com.gregtechceu.gtceu.api.machine.multiblock.part.MultiblockPartMachine;
 import com.gregtechceu.gtceu.api.machine.trait.MachineTrait;
 import com.gregtechceu.gtceu.api.machine.trait.NotifiableItemStackHandler;
 import com.gregtechceu.gtceu.api.machine.trait.RecipeLogic;
-import com.gregtechceu.gtceu.common.item.IntCircuitBehaviour;
+import com.gregtechceu.gtceu.common.item.behavior.IntCircuitBehaviour;
 import com.gregtechceu.gtceu.integration.ae2.machine.MEPatternBufferPartMachine;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.items.IItemHandlerModifiable;
+import net.neoforged.neoforge.capabilities.BlockCapabilityCache;
+import net.neoforged.neoforge.items.IItemHandlerModifiable;
 
+import appeng.api.AECapabilities;
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
+import appeng.api.storage.MEStorage;
 
 /**
  * 对 GTM 机器的读写：找相邻目标、读写电路槽、读写物品、判断是否在运行。
@@ -41,6 +45,11 @@ import appeng.api.stacks.GenericStack;
  *     <li>{@code itemHost}：真正收到物品的那台机器/零件（退料与补料都在这里）；</li>
  *     <li>{@code workMachine}：真正跑配方的机器（单方块机器本身，或零件所属的多方块控制器）。</li>
  * </ul>
+ *
+ * <p>1.21.1 变化：物品栏接口从 {@code net.minecraftforge.items} 换成
+ * {@code net.neoforged.neoforge.items}；AE 的存储能力从
+ * {@code appeng.capabilities.Capabilities.STORAGE}（该类在 AE2 19.x 已删除）
+ * 换成 NeoForge 的 {@code AECapabilities.ME_STORAGE}。</p>
  */
 public final class MachineAccess {
 
@@ -227,9 +236,9 @@ public final class MachineAccess {
      * <p>依次尝试三条路径，先成功先算：</p>
      * <ol>
      *     <li><b>GT 内部处理槽</b>：直接读机器/零件的 {@code NotifiableItemStackHandler.storage}，
-     *         不受 Forge 能力与侧面权限限制（GT 的输入槽对外往往是只进不出的）；</li>
-     *     <li><b>AE 存储</b>：ME输入总线这类方块的库存挂在 AE 网络上（{@code Capabilities.STORAGE}）；</li>
-     *     <li><b>Forge 物品栏</b>：普通容器 / 其它 mod 的机器。</li>
+     *         不受能力与侧面权限限制（GT 的输入槽对外往往是只进不出的）；</li>
+     *     <li><b>AE 存储</b>：ME输入总线这类方块的库存挂在 AE 网络上（{@code AECapabilities.ME_STORAGE}）；</li>
+     *     <li><b>NeoForge 物品栏</b>：普通容器 / 其它 mod 的机器。</li>
      * </ol>
      *
      * @param pushed          本次推送的内容（键 -> 数量），取走多少就扣多少预算
@@ -237,7 +246,7 @@ public final class MachineAccess {
      * @param leftoverKeys    只取回这些键（GT 配方里的 notConsumable 输入）；为空表示不做限制
      * @param allowUnfiltered 过滤后一无所获时，是否允许退而取回所有已推送的余料
      */
-    public static List<GenericStack> extractLeftovers(@Nullable MetaMachine machine, @Nullable Level level,
+    public static List<GenericStack> extractLeftovers(@Nullable MetaMachine machine, @Nullable ServerLevel level,
                                                       @Nullable BlockPos hostPos, @Nullable Direction side,
                                                       Map<AEKey, Long> pushed, Collection<AEKey> notOurKeys,
                                                       Collection<AEKey> leftoverKeys, boolean allowUnfiltered,
@@ -251,11 +260,11 @@ public final class MachineAccess {
         return result;
     }
 
-    private static void extractAll(@Nullable MetaMachine machine, @Nullable Level level, @Nullable BlockPos hostPos,
+    private static void extractAll(@Nullable MetaMachine machine, @Nullable ServerLevel level, @Nullable BlockPos hostPos,
                                    @Nullable Direction side, Map<AEKey, Long> pushed, Collection<AEKey> notOurKeys,
                                    Collection<AEKey> leftoverKeys, @Nullable IActionSource src,
                                    List<GenericStack> out) {
-        // 1) GT 内部处理槽：直接读 storage，不受 Forge 能力/侧面权限限制
+        // 1) GT 内部处理槽：直接读 storage，不受能力/侧面权限限制
         if (machine != null) {
             try {
                 for (MachineTrait trait : machine.getTraits()) {
@@ -267,34 +276,34 @@ public final class MachineAccess {
         }
 
         // 2) AE 存储（ME输入总线 / 样板总成等把库存挂在 AE 网络上的方块）
+        //    1.21.1（AE2 19.x）：appeng.capabilities.Capabilities 已删除，
+        //    改用 NeoForge BlockCapability（AECapabilities.ME_STORAGE），也不再有 LazyOptional。
         if (level != null && hostPos != null && src != null) {
             try {
-                var be = level.getBlockEntity(hostPos);
-                if (be != null) {
-                    var capability = be.getCapability(appeng.capabilities.Capabilities.STORAGE, side);
-                    var storage = capability.isPresent() ? capability.resolve().orElse(null) : null;
-                    if (storage != null) {
-                        for (var entry : new ArrayList<>(pushed.entrySet())) {
-                            if (skip(entry.getKey(), notOurKeys, leftoverKeys)) continue;
-                            long budget = entry.getValue();
-                            if (budget <= 0) continue;
-                            long got;
-                            try {
-                                got = storage.extract(entry.getKey(), budget, Actionable.MODULATE, src);
-                            } catch (Throwable t) {
-                                got = 0;
-                            }
-                            if (got > 0) {
-                                out.add(new GenericStack(entry.getKey(), got));
-                                entry.setValue(budget - got);
-                            }
+                MEStorage storage = BlockCapabilityCache
+                        .create(AECapabilities.ME_STORAGE, level, hostPos, side)
+                        .getCapability();
+                if (storage != null) {
+                    for (var entry : new ArrayList<>(pushed.entrySet())) {
+                        if (skip(entry.getKey(), notOurKeys, leftoverKeys)) continue;
+                        long budget = entry.getValue();
+                        if (budget <= 0) continue;
+                        long got;
+                        try {
+                            got = storage.extract(entry.getKey(), budget, Actionable.MODULATE, src);
+                        } catch (Throwable t) {
+                            got = 0;
+                        }
+                        if (got > 0) {
+                            out.add(new GenericStack(entry.getKey(), got));
+                            entry.setValue(budget - got);
                         }
                     }
                 }
             } catch (Throwable ignored) {}
         }
 
-        // 3) Forge 物品栏
+        // 3) NeoForge 物品栏
         if (machine != null) {
             try {
                 extractFromStorage(itemHandler(machine, side), pushed, notOurKeys, leftoverKeys, out);

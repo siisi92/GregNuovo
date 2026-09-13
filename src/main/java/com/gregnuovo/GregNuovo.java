@@ -1,15 +1,17 @@
 package com.gregnuovo;
 
 import com.mojang.logging.LogUtils;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.AddReloadListenerEvent;
-import net.minecraftforge.event.OnDatapackSyncEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.server.ServerStoppedEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.config.ModConfig;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.AddReloadListenerEvent;
+import net.neoforged.neoforge.event.OnDatapackSyncEvent;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import org.slf4j.Logger;
 
 import com.gregnuovo.config.GNConfig;
@@ -19,7 +21,7 @@ import com.gregnuovo.core.GNState;
 import com.gregnuovo.core.RecipeChanceResolver;
 
 /**
- * GregNuovo —— GTM(1.20.1-7.3.0) 与 AE2(15.4.x) 的自动合成整合附属。
+ * GregNuovo —— GTM(1.21.1-7.0.x) 与 AE2(19.2.x) 的自动合成整合附属。
  *
  * <p>提供五项能力：</p>
  * <ol>
@@ -37,36 +39,35 @@ public final class GregNuovo {
     public static final String MOD_NAME = "GregNuovo";
     public static final Logger LOGGER = LogUtils.getLogger();
 
-    @SuppressWarnings("removal") // ModLoadingContext#get 在 1.20.1 仍是注册配置的官方方式
-    public GregNuovo() {
-        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, GNConfig.SPEC);
-        MinecraftForge.EVENT_BUS.register(Events.class);
+    public GregNuovo(IEventBus modEventBus, ModContainer modContainer) {
+        // NeoForge：配置改为由 ModContainer 注册（Forge 的 ModLoadingContext 已移除）
+        modContainer.registerConfig(ModConfig.Type.COMMON, GNConfig.SPEC);
+        // 事件用「实例 + @SubscribeEvent」注册（NeoForge 的 EventBus 8 对 Class 形式支持有限）
+        NeoForge.EVENT_BUS.register(new Events());
         LOGGER.info("{} 已加载（GTM x AE2 自动合成整合）", MOD_NAME);
     }
 
     /** 服务端事件。 */
     public static final class Events {
 
-        private Events() {}
-
         @SubscribeEvent
-        public static void onServerTick(TickEvent.ServerTickEvent event) {
-            CraftTracker.onServerTick(event);
+        public void onServerTick(ServerTickEvent.Post event) {
+            CraftTracker.onServerTick(event.getServer());
         }
 
         @SubscribeEvent
-        public static void onAddReloadListener(AddReloadListenerEvent event) {
+        public void onAddReloadListener(AddReloadListenerEvent event) {
             // 配方重载：丢弃按配方推断的概率产物缓存
             RecipeChanceResolver.invalidate();
         }
 
         @SubscribeEvent
-        public static void onDatapackSync(OnDatapackSyncEvent event) {
+        public void onDatapackSync(OnDatapackSyncEvent event) {
             RecipeChanceResolver.invalidate();
         }
 
         @SubscribeEvent
-        public static void onServerStopped(ServerStoppedEvent event) {
+        public void onServerStopped(ServerStoppedEvent event) {
             CraftTracker.clear();
             RecipeChanceResolver.invalidate();
             GNState.clearAll();
@@ -74,12 +75,12 @@ public final class GregNuovo {
 
         /** /gregnuovo status —— 自诊断：判断五项功能是否真的跑起来了（/gtae 为旧名别名）。 */
         @SubscribeEvent
-        public static void onRegisterCommands(net.minecraftforge.event.RegisterCommandsEvent event) {
+        public void onRegisterCommands(RegisterCommandsEvent event) {
             registerStatusCommand(event, "gregnuovo");
             registerStatusCommand(event, "gtae"); // 1.0.x 时期的命令名，保留为别名
         }
 
-        private static void registerStatusCommand(net.minecraftforge.event.RegisterCommandsEvent event, String name) {
+        private static void registerStatusCommand(RegisterCommandsEvent event, String name) {
             event.getDispatcher().register(
                     net.minecraft.commands.Commands.literal(name)
                             .requires(source -> source.hasPermission(2))

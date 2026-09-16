@@ -38,18 +38,26 @@ public final class GNConfig {
                 .define("stockless", true);
         CIRCUIT_AUTO_DETECT = b
                 .comment("样板里没有编码编程电路时，从该机器可运行的 GT 配方自动推断所需电路并写入机器。",
-                        "关闭后：样板没有电路就不写电路（只按 clearWhenAbsent 处理）。")
-                .define("autoDetectFromRecipe", true);
+                        "默认关闭：推断在候选配方不唯一时容易猜错（表现为“电路写错”），",
+                        "所以默认只认样板里编码的电路；需要旧行为可以打开。")
+                .define("autoDetectFromRecipe", false);
         CLEAR_CIRCUIT_WHEN_ABSENT = b
-                .comment("样板里没有编程电路时，把机器电路槽清零（设为“无编程电路”）。")
+                .comment("样板里没有编程电路时，把机器电路槽清零（设为“无编程电路”）。",
+                        "同一台机器上刚被别的样板写过电路时不会清零，避免把刚写好的电路抹掉。")
                 .define("clearWhenAbsent", true);
         CLEAR_CIRCUIT_AFTER_CRAFT = b
-                .comment("一次合成结束后清除由本模组写入的机器电路，避免影响后续手动操作。")
+                .comment("一次合成任务结束后清除由本模组写入的机器电路，避免影响后续手动操作。",
+                        "注意是“任务结束”而不是“每炉结束”：任务期间电路保持不变，",
+                        "需要时由下一个样板当场改写，避免每炉之间出现空窗期。")
                 .define("clearAfterCraft", true);
         b.pop();
 
-        b.comment("需求1：合成结束后把“本次推送但未被消耗”的余料退回 AE 网络。").push("leftover");
-        LEFTOVER_RETURN = b.comment("总开关。").define("enabled", true);
+        b.comment("需求1：不消耗物品（模具/催化剂）在合成期间只占一份，每炉用完后收回 AE。").push("leftover");
+        LEFTOVER_RETURN = b
+                .comment("总开关。",
+                        "开启后：AE 的计划阶段就把不消耗输入当成“用完还回来”，整个任务只算 1 份；",
+                        "每炉结束后把它连同本炉产物从机器里收回到合成 CPU，下一炉再推出去。")
+                .define("enabled", true);
         b.pop();
 
         b.comment("需求3/4/5：概率产物（副产物）相关行为。").push("chance");

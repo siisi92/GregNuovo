@@ -48,6 +48,14 @@ public final class GNDiagnostics {
     public static final AtomicLong byproductPatterns = new AtomicLong();
     /** 需求4 中从等待列表里剔除的输出次数。 */
     public static final AtomicLong filteredOutputs = new AtomicLong();
+    /** 需求1：识别出"不消耗输入"并套上"容器物品"包装的样板数（AE 会因此只算 1 份）。 */
+    public static final AtomicLong containerPatterns = new AtomicLong();
+    /** 需求1：从机器里抽回并交还给 AE 的物品/流体个数。 */
+    public static final AtomicLong reclaimed = new AtomicLong();
+    /** 需求1：机器里已经有了、因此不再重复推送的不消耗物品个数。 */
+    public static final AtomicLong withheld = new AtomicLong();
+    /** 需求2：电路写入后读回校验失败的次数。 */
+    public static final AtomicLong circuitVerifyFailed = new AtomicLong();
 
     public static String report() {
         var sb = new StringBuilder();
@@ -78,6 +86,10 @@ public final class GNDiagnostics {
                 .append(" 补料重试=").append(retries.get()).append('\n');
         sb.append("副产物登记样板=").append(byproductPatterns.get())
                 .append(" 剔除多余等待=").append(filteredOutputs.get()).append('\n');
+        sb.append("不消耗输入样板=").append(containerPatterns.get())
+                .append(" 抽回交还=").append(reclaimed.get())
+                .append(" 已有不重推=").append(withheld.get()).append('\n');
+        sb.append("电路读回校验失败=").append(circuitVerifyFailed.get()).append('\n');
         sb.append(CraftTracker.describePending());
         return sb.toString();
     }

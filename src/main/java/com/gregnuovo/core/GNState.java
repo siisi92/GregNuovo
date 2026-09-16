@@ -33,6 +33,37 @@ public final class GNState {
     /** 标记当前处于“本模组自己的重试推送”中，避免重复登记。 */
     private static final ThreadLocal<Boolean> REPUSHING = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
+    /**
+     * 最近被本模组写过电路的目标 -> (电路编号, 写入时的游戏刻)。
+     *
+     * <p>用途：{@code circuit.clearWhenAbsent} 只应该在"这台机器上确实没有样板需要电路"时清零。
+     * 同一台机器上多个样板在同一 tick 内轮流推料时，没有电路的那个样板会把刚写好的电路抹掉，
+     * 表现就是"电路有时不变/压根没写进去"。</p>
+     */
+    private static final Map<Object, long[]> RECENT_CIRCUITS = Collections.synchronizedMap(new WeakHashMap<>());
+
+    /** 当前游戏刻（拿不到时返回 0）。 */
+    public static long now(@Nullable net.minecraft.world.level.Level level) {
+        try {
+            return level == null ? 0L : level.getGameTime();
+        } catch (Throwable t) {
+            return 0L;
+        }
+    }
+
+    public static void markCircuitWritten(@Nullable Object machine, int circuit, long gameTime) {
+        if (machine == null) return;
+        RECENT_CIRCUITS.put(machine, new long[] { circuit, gameTime });
+    }
+
+    /** 最近是否给这台机器写过电路（避免紧接着被别的样板清零）。 */
+    public static boolean wasCircuitWrittenRecently(@Nullable Object machine, long gameTime) {
+        if (machine == null) return false;
+        long[] last = RECENT_CIRCUITS.get(machine);
+        if (last == null) return false;
+        return gameTime - last[1] <= 40;
+    }
+
     public static void snapshotHolder(appeng.api.stacks.KeyCounter[] holder) {
         Map<appeng.api.stacks.AEKey, Long> map = new java.util.LinkedHashMap<>();
         if (holder != null) {
@@ -141,6 +172,7 @@ public final class GNState {
     /** 服务器停止时清理。 */
     public static void clearAll() {
         SLOT_CIRCUITS.clear();
+        RECENT_CIRCUITS.clear();
         HOLDER_SNAPSHOT.remove();
         CURRENT_PUSH.remove();
         REPUSHING.remove();

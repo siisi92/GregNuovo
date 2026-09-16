@@ -72,6 +72,31 @@ public final class PatternAnalyzer {
     }
 
     /**
+     * 需求1：把"机器里已经有了"的东西从待推送内容里摘掉，返回摘掉的数量。
+     *
+     * <p>不消耗物品（模具/催化剂）不会被机器消耗，所以它一旦进了机器就会一直待在那里；
+     * 而 AE 每一炉都会按样板再取一份出来。如果每一炉都往机器里塞，槽里就会越堆越多。
+     * 因此推送前先看看机器里有没有，有就摘下来还给 CPU。</p>
+     *
+     * @param alreadyPresent 判断某个键是否已经在机器里
+     */
+    public static List<GenericStack> withhold(KeyCounter[] holder, java.util.function.Predicate<AEKey> alreadyPresent) {
+        List<GenericStack> withheld = new ArrayList<>();
+        if (holder == null || alreadyPresent == null) return withheld;
+        for (var counter : holder) {
+            if (counter == null) continue;
+            for (AEKey key : new ArrayList<>(counter.keySet())) {
+                if (key == null || !alreadyPresent.test(key)) continue;
+                long amount = counter.remove(key);
+                if (amount > 0) {
+                    withheld.add(new GenericStack(key, amount));
+                }
+            }
+        }
+        return withheld;
+    }
+
+    /**
      * 把样板输入展开为“每个输入槽一个 KeyCounter”的结构，用于重试时自行推送。
      * 每个输入取第一个可用候选（与 AE 样板编码一致）。
      */

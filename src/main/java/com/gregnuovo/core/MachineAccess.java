@@ -14,6 +14,7 @@ import com.gregtechceu.gtceu.api.machine.feature.multiblock.IMultiController;
 import com.gregtechceu.gtceu.api.machine.multiblock.MultiblockControllerMachine;
 import com.gregtechceu.gtceu.api.machine.multiblock.part.MultiblockPartMachine;
 import com.gregtechceu.gtceu.api.machine.trait.MachineTrait;
+import com.gregtechceu.gtceu.api.machine.trait.NotifiableFluidTank;
 import com.gregtechceu.gtceu.api.machine.trait.NotifiableItemStackHandler;
 import com.gregtechceu.gtceu.api.machine.trait.RecipeLogic;
 import com.gregtechceu.gtceu.common.item.IntCircuitBehaviour;
@@ -23,13 +24,16 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.items.IItemHandlerModifiable;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
+import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
+import appeng.api.storage.MEStorage;
 
 /**
  * 对 GTM 机器的读写：找相邻目标、读写电路槽、读写物品、判断是否在运行。
@@ -360,6 +364,245 @@ public final class MachineAccess {
             remaining = handler.insertItem(slot, remaining, false);
         }
         return remaining.isEmpty();
+    }
+
+    // ------------------------------------------------------------------
+    // 需求1：只抽"AE 正在等的东西"（本炉产物 + 那一份不消耗物品）
+    //
+    // 刻意不做"把机器里所有东西都抽走"：GT 机器会缓存 AE 提前推进来的下一炉原料，
+    // 那些料 AE 已经记账为"消耗掉了"，抽走会让机器缺料、任务卡死。
+    // ------------------------------------------------------------------
+
+    /** 机器里是否已经有这个键（"机器里已有就不再重复推送"用）。 */
+    public static boolean hasKey(@Nullable MetaMachine machine, @Nullable Level level, @Nullable BlockPos hostPos,
+                                 @Nullable Direction side, @Nullable AEKey key, @Nullable IActionSource src) {
+        if (key == null) return false;
+
+        if (machine != null) {
+            try {
+                for (MachineTrait trait : machine.getTraits()) {
+                    if (trait instanceof NotifiableItemStackHandler handler && storageHas(handler.storage, key)) {
+                        return true;
+                    }
+                    if (trait instanceof NotifiableFluidTank tank && tankHas(tank, key)) {
+                        return true;
+                    }
+                }
+            } catch (Throwable ignored) {}
+            try {
+                var handler = itemHandler(machine, side);
+                if (handler != null && storageHas(handler, key)) return true;
+            } catch (Throwable ignored) {}
+        }
+
+        // ME输入总线这类方块把物品挂在 AE 网络上
+        if (level != null && hostPos != null && src != null) {
+            try {
+                MEStorage storage = meStorageAt(level, hostPos, side);
+                if (storage != null) {
+                    for (var available : storage.getAvailableStacks()) {
+                        if (RecipeChanceResolver.sameKey(key, available.getKey())) return true;
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+        return false;
+    }
+
+    /** 只抽走给定的键，机器里的其它东西一概不动。 */
+    public static List<GenericStack> extractKeys(@Nullable MetaMachine machine, @Nullable Level level,
+                                                 @Nullable BlockPos hostPos, @Nullable Direction side,
+                                                 @Nullable Collection<AEKey> keys, @Nullable IActionSource src) {
+        List<GenericStack> out = new ArrayList<>();
+        if (keys == null || keys.isEmpty()) return out;
+
+        // 1) GT 内部处理槽（物品 + 流体），不受能力/侧面权限限制
+        if (machine != null) {
+            try {
+                for (MachineTrait trait : machine.getTraits()) {
+                    if (trait instanceof NotifiableItemStackHandler handler) {
+                        extractKeysFromStorage(handler.storage, keys, out);
+                    } else if (trait instanceof NotifiableFluidTank tank) {
+                        extractKeysFromTank(tank, keys, out);
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        // 2) AE 存储（ME输入总线 / 样板总成等把库存挂在 AE 网络上的方块）
+        if (level != null && hostPos != null && src != null) {
+            try {
+                MEStorage storage = meStorageAt(level, hostPos, side);
+                if (storage != null) {
+                    for (AEKey key : keys) {
+                        long got;
+                        try {
+                            got = storage.extract(key, Long.MAX_VALUE, Actionable.MODULATE, src);
+                        } catch (Throwable t) {
+                            got = 0;
+                        }
+                        if (got > 0) out.add(new GenericStack(key, got));
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        // 3) Forge 物品栏
+        if (machine != null) {
+            try {
+                extractKeysFromStorage(itemHandler(machine, side), keys, out);
+            } catch (Throwable ignored) {}
+        }
+        return out;
+    }
+
+    /**
+     * 需求1（多方块）：从 ME样板总成的某个样板槽里，只抽走给定的键。
+     *
+     * <p>槽内容不是物品栏而是两张计数表，7.3.0 只有"整槽退回"，所以这里用 accessor 精确取走。</p>
+     */
+    public static List<GenericStack> extractKeysFromSlot(@Nullable Object slot, @Nullable Collection<AEKey> keys) {
+        List<GenericStack> out = new ArrayList<>();
+        if (slot == null || keys == null || keys.isEmpty()) return out;
+        try {
+            var accessor = (com.gregnuovo.mixin.gtceu.GNInternalSlotAccessor) slot;
+
+            var items = accessor.GregNuovo$getItemInventory();
+            if (items != null) {
+                List<ItemStack> remove = new ArrayList<>();
+                for (var entry : items.object2LongEntrySet()) {
+                    ItemStack stack = entry.getKey();
+                    long amount = entry.getLongValue();
+                    if (stack == null || stack.isEmpty() || amount <= 0) continue;
+                    AEItemKey key = AEItemKey.of(stack);
+                    if (key == null || !matchesAny(keys, key)) continue;
+                    out.add(new GenericStack(key, amount));
+                    remove.add(stack);
+                }
+                for (ItemStack stack : remove) items.removeLong(stack);
+            }
+
+            var fluids = accessor.GregNuovo$getFluidInventory();
+            if (fluids != null) {
+                List<FluidStack> remove = new ArrayList<>();
+                for (var entry : fluids.object2LongEntrySet()) {
+                    FluidStack stack = entry.getKey();
+                    long amount = entry.getLongValue();
+                    if (stack == null || stack.isEmpty() || amount <= 0) continue;
+                    AEFluidKey key = AEFluidKey.of(stack);
+                    if (key == null || !matchesAny(keys, key)) continue;
+                    out.add(new GenericStack(key, amount));
+                    remove.add(stack);
+                }
+                for (FluidStack stack : remove) fluids.removeLong(stack);
+            }
+
+            if (!out.isEmpty()) {
+                ((com.gregtechceu.gtceu.integration.ae2.machine.MEPatternBufferPartMachine.InternalSlot) slot)
+                        .onContentsChanged();
+            }
+        } catch (Throwable ignored) {}
+        return out;
+    }
+
+    /** 需求1（多方块）：样板槽里是否已经有这个键。 */
+    public static boolean slotHasKey(@Nullable Object slot, @Nullable AEKey key) {
+        if (slot == null || key == null) return false;
+        try {
+            var accessor = (com.gregnuovo.mixin.gtceu.GNInternalSlotAccessor) slot;
+
+            var items = accessor.GregNuovo$getItemInventory();
+            if (items != null) {
+                for (var entry : items.object2LongEntrySet()) {
+                    ItemStack stack = entry.getKey();
+                    if (stack == null || stack.isEmpty() || entry.getLongValue() <= 0) continue;
+                    AEItemKey itemKey = AEItemKey.of(stack);
+                    if (itemKey != null && RecipeChanceResolver.sameKey(key, itemKey)) return true;
+                }
+            }
+
+            var fluids = accessor.GregNuovo$getFluidInventory();
+            if (fluids != null) {
+                for (var entry : fluids.object2LongEntrySet()) {
+                    FluidStack stack = entry.getKey();
+                    if (stack == null || stack.isEmpty() || entry.getLongValue() <= 0) continue;
+                    AEFluidKey fluidKey = AEFluidKey.of(stack);
+                    if (fluidKey != null && RecipeChanceResolver.sameKey(key, fluidKey)) return true;
+                }
+            }
+        } catch (Throwable ignored) {}
+        return false;
+    }
+
+    @Nullable
+    private static MEStorage meStorageAt(Level level, BlockPos pos, @Nullable Direction side) {
+        try {
+            // Forge 1.20.1：能力要从方块实体上取
+            var be = level.getBlockEntity(pos);
+            if (be == null) return null;
+            var capability = be.getCapability(appeng.capabilities.Capabilities.STORAGE, side);
+            return capability.isPresent() ? capability.resolve().orElse(null) : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static boolean matchesAny(Collection<AEKey> keys, AEKey key) {
+        for (AEKey wanted : keys) {
+            if (RecipeChanceResolver.sameKey(wanted, key)) return true;
+        }
+        return false;
+    }
+
+    private static boolean storageHas(IItemHandlerModifiable storage, AEKey key) {
+        for (int slot = 0; slot < storage.getSlots(); slot++) {
+            ItemStack inSlot = storage.getStackInSlot(slot);
+            if (inSlot.isEmpty()) continue;
+            AEItemKey itemKey = AEItemKey.of(inSlot);
+            if (itemKey != null && RecipeChanceResolver.sameKey(key, itemKey)) return true;
+        }
+        return false;
+    }
+
+    private static void extractKeysFromStorage(@Nullable IItemHandlerModifiable storage, Collection<AEKey> keys,
+                                               List<GenericStack> out) {
+        if (storage == null) return;
+        for (int slot = 0; slot < storage.getSlots(); slot++) {
+            ItemStack inSlot = storage.getStackInSlot(slot);
+            if (inSlot.isEmpty()) continue;
+            AEItemKey itemKey = AEItemKey.of(inSlot);
+            if (itemKey == null || !matchesAny(keys, itemKey)) continue;
+            ItemStack extracted = storage.extractItem(slot, inSlot.getCount(), false);
+            if (extracted.isEmpty()) continue;
+            out.add(new GenericStack(itemKey, extracted.getCount()));
+        }
+    }
+
+    private static boolean tankHas(NotifiableFluidTank tank, AEKey key) {
+        try {
+            for (int i = 0; i < tank.getTanks(); i++) {
+                FluidStack fluid = tank.getFluidInTank(i);
+                if (fluid.isEmpty()) continue;
+                AEFluidKey fluidKey = AEFluidKey.of(fluid);
+                if (fluidKey != null && RecipeChanceResolver.sameKey(key, fluidKey)) return true;
+            }
+        } catch (Throwable ignored) {}
+        return false;
+    }
+
+    private static void extractKeysFromTank(NotifiableFluidTank tank, Collection<AEKey> keys, List<GenericStack> out) {
+        try {
+            for (int i = 0; i < tank.getTanks(); i++) {
+                FluidStack fluid = tank.getFluidInTank(i);
+                if (fluid.isEmpty()) continue;
+                AEFluidKey fluidKey = AEFluidKey.of(fluid);
+                if (fluidKey == null || !matchesAny(keys, fluidKey)) continue;
+                FluidStack drained = tank.drain(fluid.copy(),
+                        net.minecraftforge.fluids.capability.IFluidHandler.FluidAction.EXECUTE);
+                if (drained.isEmpty()) continue;
+                out.add(new GenericStack(fluidKey, drained.getAmount()));
+            }
+        } catch (Throwable ignored) {}
     }
 
     /** 机器位置 -> 朝向供应器的那一面。 */

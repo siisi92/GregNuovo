@@ -13,17 +13,17 @@ import com.gregtechceu.gtceu.api.machine.MetaMachine;
 import com.gregtechceu.gtceu.integration.ae2.machine.MEPatternBufferPartMachine;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
+import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
+import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.server.ServerLifecycleHooks;
+import appeng.crafting.execution.CraftingCpuLogic;
 
 import com.gregnuovo.GregNuovo;
 import com.gregnuovo.config.GNConfig;
@@ -31,21 +31,66 @@ import com.gregnuovo.config.GNConfig;
 /**
  * 合成周期跟踪：
  * <ol>
- *     <li>需求1：机器空闲后，把“本次推送但未被消耗”的余料退回 AE；</li>
+ *     <li>需求1：每炉结束后，把"AE 正在等的东西"（本炉产物 + 那一份不消耗物品）从机器里收回来，
+ *         先交给合成 CPU（它只收自己在等的东西），剩下的进网络；</li>
  *     <li>需求3：当前任务仍需要的概率产物没有产出时，补料重试；</li>
- *     <li>需求4：任务不需要的概率产物，不等待也不重试。</li>
+ *     <li>需求4：任务不需要的概率产物，不等待也不重试；</li>
+ *     <li>需求2：电路在<b>任务结束</b>后才清（任务期间需要别的电路就直接改写）。</li>
  * </ol>
+ *
+ * <p>为什么只收"AE 在等的"、而不是把机器清空：GT 机器会缓存 AE 提前推进来的下一炉原料，
+ * 那些料 AE 已经记账为消耗掉了，抽走会让机器缺料、任务卡死。</p>
  */
 public final class CraftTracker {
 
     /** 机器完成配方后，等待输出真正落地的宽限时间（tick）。 */
     private static final int SETTLE_GRACE = 5;
-    /** 判定“机器确实空闲”的连续空闲 tick 数。 */
+    /** 没有收到"配方完成"回调时，判定机器确实空闲的连续空闲 tick 数。 */
     private static final int IDLE_TICKS = 20;
     /** 任务结束后，等待机器停下来的最长时间（tick）。 */
     private static final int CLEANUP_TIMEOUT = 600;
 
     private static final List<PendingCraft> PENDING = new ArrayList<>();
+
+    /**
+     * 需要还给合成 CPU 的东西：推料时发现"机器里已经有了"而摘下来的那一份不消耗物品。
+     *
+     * <p>必须延后一 tick：AE 是在 {@code pushPattern} 返回<b>之后</b>才把 expectedContainerItems
+     * 写进 {@code job.waitingFor} 的，而 {@code CraftingCpuLogic#insert()} 只收自己在等的东西。</p>
+     */
+    private record CpuReturn(@Nullable CraftingCpuLogic cpu, @Nullable IGrid grid, @Nullable IActionSource src,
+                             AEKey key, long amount) {}
+
+    private static final List<CpuReturn> CPU_RETURNS = new ArrayList<>();
+
+    /** 排队把一份东西还给 CPU（CPU 拿不下的部分进网络）。 */
+    public static void queueCpuReturn(@Nullable CraftingCpuLogic cpu, @Nullable IGrid grid,
+                                      @Nullable IActionSource src, @Nullable AEKey key, long amount) {
+        if (key == null || amount <= 0) return;
+        synchronized (CPU_RETURNS) {
+            CPU_RETURNS.add(new CpuReturn(cpu, grid, src, key, amount));
+        }
+    }
+
+    private static void flushCpuReturns() {
+        List<CpuReturn> pending;
+        synchronized (CPU_RETURNS) {
+            if (CPU_RETURNS.isEmpty()) return;
+            pending = new ArrayList<>(CPU_RETURNS);
+            CPU_RETURNS.clear();
+        }
+        for (CpuReturn entry : pending) {
+            long left = entry.amount();
+            if (entry.cpu() != null) {
+                try {
+                    left -= entry.cpu().insert(entry.key(), left, Actionable.MODULATE);
+                } catch (Throwable ignored) {}
+            }
+            if (left > 0) {
+                NetworkHelper.insert(entry.grid(), entry.src(), entry.key(), left);
+            }
+        }
+    }
 
     /** 一次解析出来的目标。 */
     private record Resolved(MetaMachine work, MetaMachine itemHost) {}
@@ -89,6 +134,9 @@ public final class CraftTracker {
         synchronized (PENDING) {
             PENDING.clear();
         }
+        synchronized (CPU_RETURNS) {
+            CPU_RETURNS.clear();
+        }
     }
 
     public static int pendingCount() {
@@ -97,7 +145,7 @@ public final class CraftTracker {
         }
     }
 
-    /** 供 /GregNuovo status 使用：列出挂起记录，便于定位“卡在哪一步”。 */
+    /** 供 /gregnuovo status 使用：列出挂起记录，便于定位"卡在哪一步"。 */
     public static String describePending() {
         List<PendingCraft> snapshot;
         synchronized (PENDING) {
@@ -122,15 +170,15 @@ public final class CraftTracker {
         return sb.toString();
     }
 
-    public static void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
+    public static void onServerTick(MinecraftServer server) {
+        if (server == null) return;
+        flushCpuReturns();
+
         List<PendingCraft> snapshot;
         synchronized (PENDING) {
             if (PENDING.isEmpty()) return;
             snapshot = new ArrayList<>(PENDING);
         }
-        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-        if (server == null) return;
 
         List<PendingCraft> finished = new ArrayList<>();
         for (PendingCraft craft : snapshot) {
@@ -174,7 +222,7 @@ public final class CraftTracker {
                     craft.phase = PendingCraft.Phase.CLEANUP;
                     return true;
                 }
-                // 任务还在进行、机器却一直没开工：继续等待（任务结束时上面的分支会转入清理并退回余料）
+                // 任务还在进行、机器却一直没开工：继续等待（任务结束时上面的分支会转入清理）
                 if (craft.ticks == GNConfig.startTimeoutTicks() + 1 && GNConfig.debugLog()) {
                     GregNuovo.LOGGER.info("GregNuovo：机器迟迟没有开工，继续等待任务结束 {}", craft.describe());
                 }
@@ -187,6 +235,8 @@ public final class CraftTracker {
                 }
                 if (craft.cycleFinished && craft.cooldown <= 0) {
                     craft.cycleFinished = false;
+                    // 需求1：每炉都先把"AE 在等的东西"收回来（不消耗物品必须回到 CPU，下一炉才有得推）
+                    reclaim(level, craft, resolved);
                     if (settle(level, craft, resolved)) {
                         craft.phase = PendingCraft.Phase.WAITING_WORK;
                         craft.retries++;
@@ -202,6 +252,8 @@ public final class CraftTracker {
                 }
                 craft.ticks++;
                 if (craft.ticks > IDLE_TICKS) {
+                    // 没收到"配方完成"回调（例如手动放的配方）：也收一次
+                    reclaim(level, craft, resolved);
                     craft.phase = PendingCraft.Phase.CLEANUP;
                 }
                 return true;
@@ -216,8 +268,7 @@ public final class CraftTracker {
                 if (!working) {
                     craft.ticks++;
                     if (craft.ticks > IDLE_TICKS) {
-                        cleanup(level, craft, resolved);
-                        return false;
+                        return finish(level, craft, resolved);
                     }
                 } else {
                     craft.ticks = 0;
@@ -289,13 +340,13 @@ public final class CraftTracker {
                 GregNuovo.LOGGER.info("GregNuovo：达到重试上限 {}，停止重试 {}", max, craft.describe());
             }
         }
-        // 转入清理阶段：等机器真正空闲后再退料（避免抢走下一炉的原料）
+        // 转入清理阶段：等机器真正空闲后再收尾（避免抢走下一炉的原料）
         craft.phase = PendingCraft.Phase.CLEANUP;
         craft.ticks = 0;
         return false;
     }
 
-    /** 需求3/4：既“还没到手”又“任务确实需要”的概率产物。 */
+    /** 需求3/4：既"还没到手"又"任务确实需要"的概率产物。 */
     private static Set<AEKey> neededChancedKeys(PendingCraft craft) {
         if (craft.chancedKeys.isEmpty()) return Set.of();
         if (craft.cpu == null || !craft.cpu.hasJob()) return Set.of();
@@ -308,72 +359,93 @@ public final class CraftTracker {
         return needed;
     }
 
-    /** 需求1：退回余料 + 清理电路。 */
-    private static void cleanup(ServerLevel level, PendingCraft craft, Resolved resolved) {
+    /**
+     * 需求1：把"AE 正在等的东西"从机器里收回，先交给 CPU，剩下的进网络。
+     *
+     * <p>不消耗物品之所以能一炉一炉循环，靠的就是这里：AE 因为"容器物品"机制会把那一份写进
+     * {@code waitingFor}，所以 {@code cpu.insert()} 收得下，下一炉再从 CPU 库存推出去。</p>
+     */
+    private static void reclaim(ServerLevel level, PendingCraft craft, Resolved resolved) {
+        if (!GNConfig.leftoverReturn()) return;
+
+        Set<AEKey> wanted = new LinkedHashSet<>();
+        if (craft.cpu != null && craft.cpu.hasJob()) {
+            try {
+                craft.cpu.getAllWaitingFor(wanted);
+            } catch (Throwable ignored) {}
+        }
+        // 兜底：即使 AE 没在等（例如容器物品包装没生效），识别出来的不消耗物品也要收回来
+        if (!craft.leftoverKeys.isEmpty()) {
+            for (AEKey key : craft.leftoverKeys) {
+                Long pushed = craft.pushed.get(key);
+                if (pushed != null && pushed > 0) wanted.add(key);
+            }
+        }
+        if (wanted.isEmpty()) return;
+
+        GNDiagnostics.leftoverScans.incrementAndGet();
+
+        List<GenericStack> got;
+        if (craft.kind == PendingCraft.Kind.MULTIBLOCK && craft.buffer != null && craft.slotIndex >= 0) {
+            var slots = craft.buffer.getInternalInventory();
+            got = craft.slotIndex < slots.length
+                    ? MachineAccess.extractKeysFromSlot(slots[craft.slotIndex], wanted)
+                    : List.of();
+        } else {
+            MetaMachine host = resolved.itemHost();
+            got = MachineAccess.extractKeys(host, level, host.getPos(), craft.machineSide, wanted, craft.actionSource);
+        }
+        if (got.isEmpty()) return;
+
+        for (GenericStack stack : got) {
+            long left = stack.amount();
+            if (craft.cpu != null && craft.cpu.hasJob()) {
+                try {
+                    left -= craft.cpu.insert(stack.what(), left, Actionable.MODULATE);
+                } catch (Throwable ignored) {}
+            }
+            if (left > 0) {
+                NetworkHelper.insert(gridOf(craft), craft.actionSource, stack.what(), left);
+            }
+            GNDiagnostics.reclaimed.incrementAndGet();
+            if (GNConfig.debugLog()) {
+                GregNuovo.LOGGER.info("GregNuovo：收回 {} x{}（{}）", stack.what().getId(), stack.amount(),
+                        craft.describe());
+            }
+        }
+    }
+
+    /**
+     * 任务结束后的收尾。
+     *
+     * @return true 表示任务还在跑，记录继续保留（电路要留到任务结束才清）
+     */
+    private static boolean finish(ServerLevel level, PendingCraft craft, Resolved resolved) {
         GNDiagnostics.cleanupRuns.incrementAndGet();
         try {
-            returnLeftovers(craft, resolved);
+            reclaim(level, craft, resolved);
         } catch (Throwable t) {
-            GregNuovo.LOGGER.warn("GregNuovo：退回余料失败 {}", craft.describe(), t);
+            GregNuovo.LOGGER.warn("GregNuovo：收回残留失败 {}", craft.describe(), t);
         }
+
+        boolean jobAlive = craft.cpu != null && craft.cpu.hasJob();
+        if (jobAlive) {
+            // 需求2：电路留到任务结束才清；任务期间需要别的电路会直接改写
+            craft.phase = PendingCraft.Phase.WAITING_WORK;
+            craft.ticks = 0;
+            return true;
+        }
+
         try {
             if (GNConfig.clearCircuitAfterCraft() && craft.circuit != null) {
                 MachineAccess.setCircuit(resolved.itemHost(), -1);
                 if (resolved.work() != resolved.itemHost()) {
                     MachineAccess.setCircuit(resolved.work(), -1);
                 }
+                GNDiagnostics.circuitsCleared.incrementAndGet();
             }
         } catch (Throwable ignored) {}
-    }
-
-    private static void returnLeftovers(PendingCraft craft, Resolved resolved) {
-        if (!GNConfig.leftoverReturn()) return;
-
-        if (craft.kind == PendingCraft.Kind.MULTIBLOCK) {
-            MEPatternBufferPartMachine buffer = craft.buffer;
-            if (buffer == null || craft.slotIndex < 0) return;
-            var slots = buffer.getInternalInventory();
-            if (craft.slotIndex >= slots.length) return;
-            var slot = slots[craft.slotIndex];
-            if (slot != null && (!slot.isItemEmpty() || !slot.isFluidEmpty())) {
-                slot.refund();
-                GNDiagnostics.leftoversReturned.incrementAndGet();
-                if (GNConfig.debugLog()) {
-                    GregNuovo.LOGGER.info("GregNuovo：样板总成余料已退回网络 {}", craft.describe());
-                }
-            }
-            return;
-        }
-
-        GNDiagnostics.leftoverScans.incrementAndGet();
-        MetaMachine host = resolved.itemHost();
-        List<GenericStack> leftovers = MachineAccess.extractLeftovers(host, host.getLevel(),
-                host.getPos(), craft.machineSide, craft.pushed, craft.outputKeys, craft.leftoverKeys,
-                craft.cpu == null || !craft.cpu.hasJob(), craft.actionSource);
-
-        if (leftovers.isEmpty()) {
-            if (GNConfig.debugLog()) {
-                GregNuovo.LOGGER.info("GregNuovo：退料扫描未发现余料（{}），本次推送={}，不消耗键={}，收料方块={}",
-                        craft.describe(), craft.pushed.keySet().size(), craft.leftoverKeys.size(),
-                        host.getClass().getSimpleName());
-            }
-            return;
-        }
-
-        IGrid grid = gridOf(craft);
-        for (GenericStack stack : leftovers) {
-            AEKey key = stack.what();
-            long inserted = NetworkHelper.insert(grid, craft.actionSource, key, stack.amount());
-            long remaining = stack.amount() - inserted;
-            if (remaining > 0 && craft.providerLogic != null) {
-                craft.providerLogic.getReturnInv().insert(key, remaining,
-                        appeng.api.config.Actionable.MODULATE, craft.actionSource);
-            }
-            GNDiagnostics.leftoversReturned.incrementAndGet();
-            if (GNConfig.debugLog()) {
-                GregNuovo.LOGGER.info("GregNuovo：退回余料 {} x{}", key.getId(), stack.amount());
-            }
-        }
+        return false;
     }
 
     /** 需求3：补料重试。 */
@@ -381,7 +453,7 @@ public final class CraftTracker {
         IGrid grid = gridOf(craft);
         if (grid == null) return false;
 
-        KeyCounterBundle bundle = extractPatternInputs(craft, grid);
+        KeyCounterBundle bundle = extractPatternInputsForRepush(craft, grid);
         if (bundle == null) return false;
 
         if (craft.kind == PendingCraft.Kind.MULTIBLOCK) {
@@ -398,7 +470,7 @@ public final class CraftTracker {
                 GNState.setRepushing(false);
             }
             if (!pushed) {
-                rollback(grid, craft, bundle.extracted());
+                rollback(grid, craft, bundle.extracted(), bundle.extractedFromCpu());
                 return false;
             }
         } else {
@@ -430,30 +502,38 @@ public final class CraftTracker {
     }
 
     private record KeyCounterBundle(appeng.api.stacks.KeyCounter[] holder, Map<AEKey, Long> extracted,
-                                    List<ItemStack> stacks) {}
+                                    Map<AEKey, Long> extractedFromCpu, List<ItemStack> stacks) {}
 
-    /** 按样板输入从网络取料，取不齐则回滚并返回 null。 */
+    /**
+     * 按样板输入取料：<b>先取 CPU 内部库存，不够再取网络</b>。
+     *
+     * <p>先取 CPU 是需求1 的关键：不消耗物品在合成期间就待在 CPU 库存里，
+     * 只在网络里找是找不到的。取不齐则回滚并返回 null。</p>
+     */
     @Nullable
-    private static KeyCounterBundle extractPatternInputs(PendingCraft craft, IGrid grid) {
+    private static KeyCounterBundle extractPatternInputsForRepush(PendingCraft craft, IGrid grid) {
         var holder = PatternAnalyzer.expandInputs(craft.pattern);
         PatternAnalyzer.stripCircuits(holder);
 
         Map<AEKey, Long> extracted = new LinkedHashMap<>();
+        Map<AEKey, Long> fromCpu = new LinkedHashMap<>();
         List<ItemStack> stacks = new ArrayList<>();
-        outer:
         for (var counter : holder) {
             for (var entry : counter) {
                 AEKey key = entry.getKey();
                 long want = entry.getLongValue();
-                long got = NetworkHelper.extract(grid, craft.actionSource, key, want);
+                long gotCpu = extractFromCpu(craft, key, want);
+                long gotNet = gotCpu >= want ? 0
+                        : NetworkHelper.extract(grid, craft.actionSource, key, want - gotCpu);
+                long got = gotCpu + gotNet;
                 if (got < want) {
-                    if (got > 0) {
-                        NetworkHelper.insert(grid, craft.actionSource, key, got);
-                    }
-                    rollback(grid, craft, extracted);
+                    if (gotCpu > 0) insertToCpu(craft, key, gotCpu);
+                    if (gotNet > 0) NetworkHelper.insert(grid, craft.actionSource, key, gotNet);
+                    rollback(grid, craft, extracted, fromCpu);
                     return null;
                 }
                 extracted.merge(key, got, Long::sum);
+                if (gotCpu > 0) fromCpu.merge(key, gotCpu, Long::sum);
                 if (key instanceof AEItemKey itemKey) {
                     long left = got;
                     int maxStack = Math.max(1, itemKey.toStack().getMaxStackSize());
@@ -466,12 +546,32 @@ public final class CraftTracker {
             }
         }
         if (extracted.isEmpty()) return null;
-        return new KeyCounterBundle(holder, extracted, stacks);
+        return new KeyCounterBundle(holder, extracted, fromCpu, stacks);
     }
 
-    private static void rollback(IGrid grid, PendingCraft craft, Map<AEKey, Long> extracted) {
+    private static long extractFromCpu(PendingCraft craft, AEKey key, long want) {
+        if (want <= 0 || craft.cpu == null || !craft.cpu.hasJob()) return 0;
+        try {
+            return craft.cpu.getInventory().extract(key, want, Actionable.MODULATE);
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    private static void insertToCpu(PendingCraft craft, AEKey key, long amount) {
+        if (amount <= 0 || craft.cpu == null || !craft.cpu.hasJob()) return;
+        try {
+            craft.cpu.getInventory().insert(key, amount, Actionable.MODULATE);
+        } catch (Throwable ignored) {}
+    }
+
+    private static void rollback(IGrid grid, PendingCraft craft, Map<AEKey, Long> extracted,
+                                 Map<AEKey, Long> fromCpu) {
         for (var entry : extracted.entrySet()) {
-            NetworkHelper.insert(grid, craft.actionSource, entry.getKey(), entry.getValue());
+            long cpuPart = fromCpu.getOrDefault(entry.getKey(), 0L);
+            if (cpuPart > 0) insertToCpu(craft, entry.getKey(), cpuPart);
+            long netPart = entry.getValue() - cpuPart;
+            if (netPart > 0) NetworkHelper.insert(grid, craft.actionSource, entry.getKey(), netPart);
         }
     }
 

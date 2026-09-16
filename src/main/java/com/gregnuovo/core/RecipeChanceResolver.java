@@ -130,7 +130,8 @@ public final class RecipeChanceResolver {
         return sb.toString();
     }
 
-    private static List<GTRecipe> candidates(GTRecipeType type, List<GenericStack> outputs, List<AEKey> inputKeys) {
+    /** 某个配方类型下、与这个样板匹配的候选配方（需求1 的"不消耗输入"推断也要用）。 */
+    static List<GTRecipe> candidates(GTRecipeType type, List<GenericStack> outputs, List<AEKey> inputKeys) {
         Map<Item, List<GTRecipe>> index;
         synchronized (INDEX) {
             index = INDEX.computeIfAbsent(type, RecipeChanceResolver::buildIndex);

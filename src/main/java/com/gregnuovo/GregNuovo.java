@@ -16,6 +16,7 @@ import com.gregnuovo.config.GNConfig;
 import com.gregnuovo.core.CraftTracker;
 import com.gregnuovo.core.GNDiagnostics;
 import com.gregnuovo.core.GNState;
+import com.gregnuovo.core.NonConsumableIndex;
 import com.gregnuovo.core.RecipeChanceResolver;
 
 /**
@@ -51,24 +52,28 @@ public final class GregNuovo {
 
         @SubscribeEvent
         public static void onServerTick(TickEvent.ServerTickEvent event) {
-            CraftTracker.onServerTick(event);
+            if (event.phase != TickEvent.Phase.END) return;
+            CraftTracker.onServerTick(net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer());
         }
 
         @SubscribeEvent
         public static void onAddReloadListener(AddReloadListenerEvent event) {
-            // 配方重载：丢弃按配方推断的概率产物缓存
+            // 配方重载：丢弃按配方推断的概率产物缓存与"不消耗输入"缓存
             RecipeChanceResolver.invalidate();
+            NonConsumableIndex.invalidate();
         }
 
         @SubscribeEvent
         public static void onDatapackSync(OnDatapackSyncEvent event) {
             RecipeChanceResolver.invalidate();
+            NonConsumableIndex.invalidate();
         }
 
         @SubscribeEvent
         public static void onServerStopped(ServerStoppedEvent event) {
             CraftTracker.clear();
             RecipeChanceResolver.invalidate();
+            NonConsumableIndex.invalidate();
             GNState.clearAll();
         }
 

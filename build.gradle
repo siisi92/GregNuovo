@@ -15,53 +15,59 @@ java {
 
 repositories {
     mavenCentral()
-    flatDir { dirs project.libs_dir }
 }
 
-// 编译所需的依赖 jar（只用于编译/开发运行，不随仓库分发、不打包进产物）
-def requiredLibs = [
-        'gtceu-1.20.1-7.3.0.jar',
-        'appliedenergistics2-forge-15.4.10.jar',
-        'ldlib-forge-1.20.1-1.0.52.jar',
-        'architectury-9.2.14-forge.jar',
-        'configuration-forge-1.20.1-3.1.0.jar',
-        'guideme-20.1.15.jar'
+// ---------------------------------------------------------------------------
+// 编译所需的依赖 jar：GTM / AE2 / LDLib / Architectury / Configuration / GuideME
+//
+// 这些 jar 只用于编译与开发运行，不随本仓库分发，也不会打包进产物。
+// 这里按关键字匹配文件名，所以从整合包 mods/ 目录里直接复制过来的名字
+// （可能带前缀、小版本号不同）也能用。详见 libs/README.md。
+// ---------------------------------------------------------------------------
+def libsDir = file(project.libs_dir)
+def localJars = libsDir.exists()
+        ? fileTree(libsDir) { include '*.jar' }
+        : files()
+
+def requiredLibHints = [
+        'gtceu'              : 'GregTech CEu Modern 1.20.1-7.3.0（gtceu-1.20.1-7.3.0.jar）',
+        'appliedenergistics2': 'Applied Energistics 2 15.4.10 Forge（appliedenergistics2-forge-15.4.10.jar）',
+        'ldlib'              : 'LDLib（ldlib-forge-1.20.1-*.jar）',
+        'architectury'       : 'Architectury API（architectury-*-forge.jar）'
 ]
-def missingLibs = requiredLibs.findAll { !file("${project.libs_dir}/${it}").exists() }
-if (!missingLibs.isEmpty()) {
-    def message = "缺少编译所需的依赖 jar：${missingLibs.join('、')}\n" +
-            "请把它们放进 ${project.libs_dir}/ 目录（文件名要与上面 requiredLibs 里完全一致）。\n" +
-            "最省事的做法：直接从已装好这些 mod 的整合包实例的 mods/ 目录里复制过来。"
+
+def libNames = localJars.files.collect { it.name.toLowerCase(Locale.ROOT) }
+def missingHints = requiredLibHints.findAll { keyword, hint -> !libNames.any { it.contains(keyword) } }
+        .values() as List
+
+if (!missingHints.isEmpty()) {
+    def message = "libs/ 目录里缺少编译所需的依赖 jar：\n  - " + missingHints.join("\n  - ") +
+            "\n请把它们放进 ${project.libs_dir}/ 目录（文件名不限，含关键字即可），详见 libs/README.md。\n" +
+            "最省事的做法：从已装好这些 mod 的 1.20.1 整合包实例的 mods/ 目录里复制过来。"
     def tasks = gradle.startParameter.taskNames.join(' ')
     def needsLibs = tasks.isEmpty() || ['build', 'jar', 'run', 'compile', 'test'].any { tasks.contains(it) }
     if (needsLibs) {
         throw new GradleException(message)
     }
-    logger.lifecycle("[GregNuovo] 提示：${message}")
+    logger.lifecycle("[GregNuovo] 提示：" + message)
+}
+
+// 防呆：混进 1.21.1 / NeoForge 的 jar 时直接说清楚（两个版本的混淆名不通用）
+def wrongVersionJars = localJars.files.findAll {
+    it.name.contains('1.21.1') || it.name.toLowerCase(Locale.ROOT).contains('neoforge')
+}.collect { it.name }.sort()
+if (!wrongVersionJars.isEmpty()) {
+    throw new GradleException("libs/ 里混着 1.21.1 / NeoForge 的依赖 jar，1.20.1 版用不了：\n  - " +
+            wrongVersionJars.join("\n  - ") +
+            "\n1.20.1 请用 Forge 的构建；如果你想玩 1.21.1 版，见 1.21.1-neoforge 分支。")
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}"
 
-    // GTM 7.3.0（本体在目标整合包中，仅编译/开发期引用）
-    compileOnly fg.deobf(files("${project.libs_dir}/gtceu-1.20.1-7.3.0.jar"))
-    runtimeOnly fg.deobf(files("${project.libs_dir}/gtceu-1.20.1-7.3.0.jar"))
-
-    // AE2 15.4.10
-    compileOnly fg.deobf(files("${project.libs_dir}/appliedenergistics2-forge-15.4.10.jar"))
-    runtimeOnly fg.deobf(files("${project.libs_dir}/appliedenergistics2-forge-15.4.10.jar"))
-
-    // LDLib：GTM 7.3.0 的 UI/同步依赖（GTM 机器类层次引用 com.lowdragmc.*）
-    compileOnly fg.deobf(files("${project.libs_dir}/ldlib-forge-1.20.1-1.0.52.jar"))
-    runtimeOnly fg.deobf(files("${project.libs_dir}/ldlib-forge-1.20.1-1.0.52.jar"))
-
-    // Architectury：LDLib 依赖
-    compileOnly fg.deobf(files("${project.libs_dir}/architectury-9.2.14-forge.jar"))
-    runtimeOnly fg.deobf(files("${project.libs_dir}/architectury-9.2.14-forge.jar"))
-
-    // 仅开发环境运行期依赖（GTM / AE2 的必需前置）
-    runtimeOnly fg.deobf(files("${project.libs_dir}/configuration-forge-1.20.1-3.1.0.jar"))
-    runtimeOnly fg.deobf(files("${project.libs_dir}/guideme-20.1.15.jar"))
+    // 上游 mod：本体在目标整合包里，这里只用于编译与开发运行
+    compileOnly fg.deobf(localJars)
+    runtimeOnly fg.deobf(localJars)
 }
 
 minecraft {
@@ -92,12 +98,12 @@ processResources {
     inputs.property 'version', project.version
     filesMatching('META-INF/mods.toml') {
         expand(
-            'version': project.version,
-            'mod_id': project.mod_id,
-            'mod_name': project.mod_name,
-            'mod_license': project.mod_license,
-            'mod_authors': project.mod_authors,
-            'mod_description': project.mod_description
+                'version': project.version,
+                'mod_id': project.mod_id,
+                'mod_name': project.mod_name,
+                'mod_license': project.mod_license,
+                'mod_authors': project.mod_authors,
+                'mod_description': project.mod_description
         )
     }
 }
@@ -110,12 +116,13 @@ jar {
     }
     manifest {
         attributes([
-            'Specification-Title'    : project.mod_id,
-            'Specification-Version'  : '1',
-            'Implementation-Title'   : project.mod_name,
-            'Implementation-Version' : project.version,
-            'Implementation-Vendor'  : project.mod_authors,
-            'MixinConfigs'           : 'gregnuovo.mixins.json'
+                'Specification-Title'   : project.mod_id,
+                'Specification-Version' : '1',
+                'Implementation-Title'  : project.mod_name,
+                'Implementation-Version': project.version,
+                'Implementation-Vendor' : project.mod_authors,
+                // Forge 1.20.1 认这个清单属性来加载 Mixin 配置
+                'MixinConfigs'          : 'gregnuovo.mixins.json'
         ] as LinkedHashMap)
     }
 }

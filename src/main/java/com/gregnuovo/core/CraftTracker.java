@@ -381,6 +381,8 @@ public final class CraftTracker {
                 if (pushed != null && pushed > 0) wanted.add(key);
             }
         }
+        // 电路从来没被推进机器（推送前就剥掉了），别去机器里找它
+        wanted.removeIf(PatternAnalyzer::isCircuitKey);
         if (wanted.isEmpty()) return;
 
         GNDiagnostics.leftoverScans.incrementAndGet();

@@ -113,10 +113,13 @@ public final class NonConsumableIndex {
             for (AEKey key : keysOf(content)) {
                 if (key == null) continue;
                 for (AEKey patternKey : inputKeys) {
-                    if (RecipeChanceResolver.sameKey(patternKey, key)) {
-                        out.add(patternKey);
-                        break;
-                    }
+                    if (!RecipeChanceResolver.sameKey(patternKey, key)) continue;
+                    // 编程电路在 GT 配方里也是 chance == 0（circuitMeta 就是这么实现的），
+                    // 但它有自己的一套处理（stockless 构造 + 推送前剥离），绝不能当成"容器物品"，
+                    // 否则 AE 会一直等一个永远不会回来的电路。
+                    if (PatternAnalyzer.isCircuitKey(patternKey)) break;
+                    out.add(patternKey);
+                    break;
                 }
             }
         }

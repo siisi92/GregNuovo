@@ -87,7 +87,7 @@ public final class GNHooks {
         if (circuit != null) {
             if (MachineAccess.setCircuitOn(target, circuit)) {
                 GNDiagnostics.circuitsWritten.incrementAndGet();
-                GNState.markCircuitWritten(target.itemHost(), circuit, GNState.now(be.getLevel()));
+                markCircuit(target, circuit, be.getLevel());
                 verifyCircuit(target, circuit, details);
                 if (GNConfig.debugLog()) {
                     GregNuovo.LOGGER.info("GregNuovo：写入电路 {} -> 收料方块={} 工作机={}（来源={}）", circuit,
@@ -149,7 +149,7 @@ public final class GNHooks {
             // 推料前可能写到了另一台相邻方块上，这里按“真正收到料的那一台”再校准一次（需求2：强制重写）
             if (MachineAccess.setCircuitOn(target, circuit)) {
                 GNDiagnostics.circuitsWritten.incrementAndGet();
-                GNState.markCircuitWritten(itemHost, circuit, GNState.now(level));
+                markCircuit(target, circuit, level);
                 verifyCircuit(target, circuit, details);
             }
         }
@@ -366,6 +366,20 @@ public final class GNHooks {
         int readBack = Math.max(MachineAccess.getCircuit(target.itemHost()),
                 MachineAccess.getCircuit(target.workMachine()));
         warnIfMismatch(circuit, readBack, details);
+    }
+
+    /**
+     * 记下"这台机器刚被写过电路"。
+     *
+     * <p>两台都记：{@code setCircuitOn} 会优先写收料方块、写不进去才写工作机，
+     * 而 {@code clearWhenAbsent} 要在这两个对象上都能查到"刚写过"才不会误清。</p>
+     */
+    private static void markCircuit(MachineAccess.Target target, int circuit, @Nullable Level level) {
+        long now = GNState.now(level);
+        GNState.markCircuitWritten(target.itemHost(), circuit, now);
+        if (target.workMachine() != target.itemHost()) {
+            GNState.markCircuitWritten(target.workMachine(), circuit, now);
+        }
     }
 
     private static void warnIfMismatch(int wanted, int readBack, @Nullable IPatternDetails details) {

@@ -41,15 +41,32 @@ public final class ContainerPattern implements IPatternDetails {
         this.delegate = delegate;
         this.nonConsumable = nonConsumable;
 
+        // 需求2：编程电路不是"输入物品"，它只是写在样板里、告诉机器该用哪个电路的一条指令。
+        // 所以这里直接把它从输入里摘掉：AE 既不会把它算进需求量（"使用物品列表"里不再出现），
+        // 也不会去网络/CPU 里取它、更不会推进机器——机器那边由本模组写电路槽。
         IInput[] original = delegate.getInputs();
-        this.inputs = new IInput[original.length];
-        for (int i = 0; i < original.length; i++) {
-            this.inputs[i] = new ContainerInput(original[i]);
+        java.util.List<IInput> kept = new java.util.ArrayList<>(original.length);
+        for (IInput input : original) {
+            if (isCircuitInput(input)) continue;
+            kept.add(new ContainerInput(input));
         }
+        this.inputs = kept.toArray(new IInput[0]);
+    }
+
+    /** 这个输入是不是编程电路（候选项里有电路就算）。 */
+    private static boolean isCircuitInput(@Nullable IInput input) {
+        if (input == null) return false;
+        try {
+            for (GenericStack possible : input.getPossibleInputs()) {
+                if (possible != null && PatternAnalyzer.isCircuitKey(possible.what())) return true;
+            }
+        } catch (Throwable ignored) {}
+        return false;
     }
 
     /**
-     * 需要时给样板套上"容器物品"包装；没有不消耗输入时原样返回。
+     * 需要时给样板套一层包装（摘掉电路输入 + 把不消耗输入当成"用完还回来"）；
+     * 两者都不涉及就原样返回。
      */
     @Nullable
     public static IPatternDetails wrapIfNeeded(@Nullable IPatternDetails details) {
@@ -59,8 +76,10 @@ public final class ContainerPattern implements IPatternDetails {
         // 只处理加工样板：合成/切石/锻造样板本身就有容器物品语义，别去动它们
         if (!(details instanceof appeng.crafting.pattern.AEProcessingPattern)) return details;
         try {
+            // 只要有电路输入就必须包装（哪怕一个不消耗输入都没有）
+            boolean hasCircuit = PatternAnalyzer.hasCircuitInput(details);
             Set<AEKey> nonConsumable = NonConsumableIndex.nonConsumableKeys(details);
-            if (nonConsumable.isEmpty()) return details;
+            if (!hasCircuit && nonConsumable.isEmpty()) return details;
             GNDiagnostics.containerPatterns.incrementAndGet();
             return new ContainerPattern(details, nonConsumable);
         } catch (Throwable t) {
@@ -75,6 +94,16 @@ public final class ContainerPattern implements IPatternDetails {
             if (RecipeChanceResolver.sameKey(candidate, key)) return true;
         }
         return false;
+    }
+
+    /**
+     * 取回原始样板（本模组包装过的话）。
+     *
+     * <p>读"样板里写的是哪个电路"必须走这里：包装后的 {@link #getInputs()} 已经把电路摘掉了，
+     * 直接读会读到"没有电路"。</p>
+     */
+    public static IPatternDetails raw(@Nullable IPatternDetails details) {
+        return details instanceof ContainerPattern wrapper ? wrapper.delegate : details;
     }
 
     @Override
@@ -104,7 +133,16 @@ public final class ContainerPattern implements IPatternDetails {
 
     @Override
     public void pushInputsToExternalInventory(KeyCounter[] inputHolder, PatternInputSink inputSink) {
-        delegate.pushInputsToExternalInventory(inputHolder, inputSink);
+        // 不能直接委托给原样板：它的实现会按"原始输入"（含电路）去核对数量，
+        // 而我们这里已经把电路摘掉了，委托过去会报"Expected at least 1 of <电路>"。
+        // 这里按 AE 的默认语义（把 holder 里的东西原样推给 sink）自己推一遍即可。
+        if (inputHolder == null) return;
+        for (var counter : inputHolder) {
+            if (counter == null) continue;
+            for (var entry : counter) {
+                inputSink.pushInput(entry.getKey(), entry.getLongValue());
+            }
+        }
     }
 
     @Override

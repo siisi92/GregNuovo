@@ -7,7 +7,6 @@
     "ae2.CraftingCpuHelperMixin",
     "ae2.CraftingCpuLogicMixin",
     "ae2.NetworkCraftingProvidersMixin",
-    "ae2.NetworkCraftingSimulationStateMixin",
     "ae2.PatternDetailsHelperMixin",
     "ae2.PatternProviderLogicMixin",
     "ae2.accessor.CraftingCpuLogicAccessor",

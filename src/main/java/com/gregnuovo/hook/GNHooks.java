@@ -433,6 +433,8 @@ public final class GNHooks {
     @Nullable
     public static Integer circuitOrNull(IPatternDetails details) {
         if (details == null) return null;
+        // 必须读原始样板：包装后的 getInputs() 已经把电路摘掉了（它不算输入物品）
+        details = com.gregnuovo.core.ContainerPattern.raw(details);
         for (var input : details.getInputs()) {
             for (GenericStack possible : input.getPossibleInputs()) {
                 if (possible == null) continue;

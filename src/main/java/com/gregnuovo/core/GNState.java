@@ -64,6 +64,29 @@ public final class GNState {
         return gameTime - last[1] <= 40;
     }
 
+    /**
+     * 本模组<b>凭空构造</b>并放进某个合成 CPU 库存里的东西（目前只有"免库存"模式下的编程电路）。
+     *
+     * <p>必须单独记账：AE 在任务结束时会把 CPU 库存整个倒回网络（{@code finishJob → storeItems}），
+     * 凭空构造的东西如果留在里面就会变成真物品，等于复制。所以要在任务结束前把它们清掉。</p>
+     */
+    private static final Map<Object, java.util.Set<appeng.api.stacks.AEKey>> FABRICATED =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    /** 记下"这份东西是凭空构造的"。 */
+    public static void recordFabricated(@Nullable Object cpu, @Nullable appeng.api.stacks.AEKey key) {
+        if (cpu == null || key == null) return;
+        var set = FABRICATED.computeIfAbsent(cpu, k -> java.util.concurrent.ConcurrentHashMap.newKeySet());
+        set.add(key);
+    }
+
+    /** 取出并清空这个 CPU 的"凭空构造"清单。 */
+    public static java.util.Set<appeng.api.stacks.AEKey> takeFabricated(@Nullable Object cpu) {
+        if (cpu == null) return java.util.Set.of();
+        var set = FABRICATED.remove(cpu);
+        return set == null ? java.util.Set.of() : set;
+    }
+
     public static void snapshotHolder(appeng.api.stacks.KeyCounter[] holder) {
         Map<appeng.api.stacks.AEKey, Long> map = new java.util.LinkedHashMap<>();
         if (holder != null) {
@@ -173,6 +196,7 @@ public final class GNState {
     public static void clearAll() {
         SLOT_CIRCUITS.clear();
         RECENT_CIRCUITS.clear();
+        FABRICATED.clear();
         HOLDER_SNAPSHOT.remove();
         CURRENT_PUSH.remove();
         REPUSHING.remove();

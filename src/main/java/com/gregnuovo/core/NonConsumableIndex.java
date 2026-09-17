@@ -115,9 +115,10 @@ public final class NonConsumableIndex {
                 for (AEKey patternKey : inputKeys) {
                     if (!RecipeChanceResolver.sameKey(patternKey, key)) continue;
                     // 编程电路在 GT 配方里也是 chance == 0（circuitMeta 就是这么实现的），
-                    // 但它有自己的一套处理（stockless 构造 + 推送前剥离），绝不能当成"容器物品"，
-                    // 否则 AE 会一直等一个永远不会回来的电路。
-                    if (PatternAnalyzer.isCircuitKey(patternKey)) break;
+                    // 这里刻意<b>不</b>排除它：让它也当"用完原样还回来"的容器物品，
+                    // AE 才会把它算成 1 份（峰值缺口）而不是 N 份（累计消耗）——
+                    // 也就是"使用物品列表里只显示、不消耗"。
+                    // 它的实际流转由 GNHooks 的推送前剥离 + 交还 CPU 负责，不会真的进机器。
                     out.add(patternKey);
                     break;
                 }

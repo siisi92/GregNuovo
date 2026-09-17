@@ -95,12 +95,7 @@ public final class GNHooks {
                             decision.fromPattern() ? "样板编码" : "配方推断");
                 }
                 var stripped = PatternAnalyzer.stripCircuits(holder);
-                if (!GNConfig.circuitStockless()) {
-                    IGrid grid = logic.getGrid();
-                    for (GenericStack stack : stripped) {
-                        NetworkHelper.insert(grid, src, stack.what(), stack.amount());
-                    }
-                }
+                returnStrippedCircuits(stripped, logic.getGrid(), src);
             } else {
                 GNDiagnostics.circuitNoSlot.incrementAndGet();
                 logNoCircuitSlot(target);
@@ -221,13 +216,8 @@ public final class GNHooks {
         // 只有成功接管（该槽位拥有自己的电路）时才剥掉电路物品，否则保持原版行为，避免配方无法匹配
         if (!GNConfig.circuitInjection() || circuit == null || !slotCircuitReady) return;
 
-        var stripped = PatternAnalyzer.stripCircuits(holder);
-        if (!GNConfig.circuitStockless()) {
-            IGrid grid = buffer.getMainNode() == null ? null : buffer.getMainNode().getGrid();
-            for (GenericStack stack : stripped) {
-                NetworkHelper.insert(grid, buffer.getActionSource(), stack.what(), stack.amount());
-            }
-        }
+        IGrid bufferGrid = buffer.getMainNode() == null ? null : buffer.getMainNode().getGrid();
+        returnStrippedCircuits(PatternAnalyzer.stripCircuits(holder), bufferGrid, buffer.getActionSource());
     }
 
     public static void afterBufferPush(MEPatternBufferPartMachine buffer, IPatternDetails details, boolean success) {
@@ -292,6 +282,27 @@ public final class GNHooks {
         CraftTracker.onRecipeFinished(machine);
     }
 
+    /**
+     * 合成任务即将结束（{@code CraftingCpuLogic#finishJob} 开头）。
+     *
+     * <p>AE 紧接着会把 CPU 库存整个倒回网络。本模组"凭空构造"的编程电路如果还在里面，
+     * 就会变成真物品（等于复制），所以这里先把它清掉——只清我们记过账的那几个键。</p>
+     */
+    public static void onJobFinishing(CraftingCpuLogic cpu) {
+        java.util.Set<AEKey> fabricated = GNState.takeFabricated(cpu);
+        if (fabricated.isEmpty()) return;
+        try {
+            var inventory = cpu.getInventory();
+            for (AEKey key : fabricated) {
+                long removed = inventory.extract(key, Long.MAX_VALUE, appeng.api.config.Actionable.MODULATE);
+                if (removed > 0 && GNConfig.debugLog()) {
+                    GregNuovo.LOGGER.info("GregNuovo：任务结束，清除凭空构造的 {} x{}（否则会被倒回网络）",
+                            key.getId(), removed);
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
     // ------------------------------------------------------------------
     // 需求1：不消耗物品不重复推送
     // ------------------------------------------------------------------
@@ -310,7 +321,8 @@ public final class GNHooks {
 
         MetaMachine itemHost = target.itemHost();
         MetaMachine work = target.workMachine();
-        var withheld = PatternAnalyzer.withhold(holder, key -> contains(nonConsumable, key)
+        var withheld = PatternAnalyzer.withhold(holder, key -> !PatternAnalyzer.isCircuitKey(key)
+                && contains(nonConsumable, key)
                 && (MachineAccess.hasKey(itemHost, level, itemHost.getPos(), target.side(), key, src)
                         || MachineAccess.hasKey(work, level, work.getPos(), target.side(), key, src)));
 
@@ -324,8 +336,8 @@ public final class GNHooks {
         if (nonConsumable.isEmpty()) return;
 
         Object slot = index >= 0 ? slotOf(buffer, index) : null;
-        var withheld = PatternAnalyzer.withhold(holder,
-                key -> contains(nonConsumable, key) && MachineAccess.slotHasKey(slot, key));
+        var withheld = PatternAnalyzer.withhold(holder, key -> !PatternAnalyzer.isCircuitKey(key)
+                && contains(nonConsumable, key) && MachineAccess.slotHasKey(slot, key));
 
         IGrid grid = buffer.getMainNode() == null ? null : buffer.getMainNode().getGrid();
         returnToCpu(withheld, grid, buffer.getActionSource());
@@ -340,6 +352,27 @@ public final class GNHooks {
             CraftTracker.queueCpuReturn(cpu, grid, src, stack.what(), stack.amount());
             if (GNConfig.debugLog()) {
                 GregNuovo.LOGGER.info("GregNuovo：机器里已有 {}，本次不再推送，已交还 CPU", stack.what().getId());
+            }
+        }
+    }
+
+    /**
+     * 需求2：把剥下来的编程电路交还给合成 CPU。
+     *
+     * <p>电路在 AE 眼里是"用完原样还回来"的容器物品（所以"使用物品列表"里只显示 1 份、不消耗），
+     * 而它并不会真的进机器——机器用的是我们写进电路槽的编号。所以每一炉剥下来的这一份必须还回
+     * 合成 CPU，下一炉才有得拿，否则第二炉就会因为"取不到电路"推不出去。</p>
+     */
+    private static void returnStrippedCircuits(java.util.List<GenericStack> stripped, @Nullable IGrid grid,
+                                               @Nullable IActionSource src) {
+        if (stripped.isEmpty()) return;
+        CraftingCpuLogic cpu = GNState.currentCpu();
+        for (GenericStack stack : stripped) {
+            if (GNConfig.circuitStockless()) {
+                // 免库存模式下这份电路是凭空构造的：只能还给 CPU，绝不能流进网络（那会复制物品）
+                CraftTracker.queueCpuReturnOnly(cpu, stack.what(), stack.amount());
+            } else {
+                CraftTracker.queueCpuReturn(cpu, grid, src, stack.what(), stack.amount());
             }
         }
     }

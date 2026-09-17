@@ -59,16 +59,29 @@ public final class CraftTracker {
      * 写进 {@code job.waitingFor} 的，而 {@code CraftingCpuLogic#insert()} 只收自己在等的东西。</p>
      */
     private record CpuReturn(@Nullable CraftingCpuLogic cpu, @Nullable IGrid grid, @Nullable IActionSource src,
-                             AEKey key, long amount) {}
+                             AEKey key, long amount, boolean allowNetworkFallback) {}
 
     private static final List<CpuReturn> CPU_RETURNS = new ArrayList<>();
 
     /** 排队把一份东西还给 CPU（CPU 拿不下的部分进网络）。 */
     public static void queueCpuReturn(@Nullable CraftingCpuLogic cpu, @Nullable IGrid grid,
                                       @Nullable IActionSource src, @Nullable AEKey key, long amount) {
+        queue(cpu, grid, src, key, amount, true);
+    }
+
+    /**
+     * 排队把一份<b>凭空构造</b>的东西还给 CPU：CPU 拿不下就直接丢弃，绝不流进网络（否则等于复制物品）。
+     */
+    public static void queueCpuReturnOnly(@Nullable CraftingCpuLogic cpu, @Nullable AEKey key, long amount) {
+        GNState.recordFabricated(cpu, key);
+        queue(cpu, null, null, key, amount, false);
+    }
+
+    private static void queue(@Nullable CraftingCpuLogic cpu, @Nullable IGrid grid, @Nullable IActionSource src,
+                              @Nullable AEKey key, long amount, boolean allowNetworkFallback) {
         if (key == null || amount <= 0) return;
         synchronized (CPU_RETURNS) {
-            CPU_RETURNS.add(new CpuReturn(cpu, grid, src, key, amount));
+            CPU_RETURNS.add(new CpuReturn(cpu, grid, src, key, amount, allowNetworkFallback));
         }
     }
 
@@ -86,7 +99,7 @@ public final class CraftTracker {
                     left -= entry.cpu().insert(entry.key(), left, Actionable.MODULATE);
                 } catch (Throwable ignored) {}
             }
-            if (left > 0) {
+            if (left > 0 && entry.allowNetworkFallback()) {
                 NetworkHelper.insert(entry.grid(), entry.src(), entry.key(), left);
             }
         }
